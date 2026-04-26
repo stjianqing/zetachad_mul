@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import pg from 'pg';
 
@@ -28,6 +28,7 @@ export async function migrate(pool) {
     .filter((f) => f.endsWith('.sql'))
     .sort();
 
+  // Migrations are tracked by filename only; editing an applied migration is not detected. Write a new one instead.
   const { rows: applied } = await pool.query(
     'SELECT filename FROM schema_migrations'
   );
@@ -47,8 +48,8 @@ export async function migrate(pool) {
       await client.query('COMMIT');
       console.log(`migrated: ${file}`);
     } catch (err) {
-      await client.query('ROLLBACK');
-      throw new Error(`migration ${file} failed: ${err.message}`);
+      try { await client.query('ROLLBACK'); } catch { /* swallow rollback error to preserve original */ }
+      throw new Error(`migration ${file} failed: ${err.message}`, { cause: err });
     } finally {
       client.release();
     }
@@ -56,7 +57,7 @@ export async function migrate(pool) {
 }
 
 // Allow running as: `npm run migrate`
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const pool = makePool();
   try {
     await migrate(pool);

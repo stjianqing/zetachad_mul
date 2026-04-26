@@ -1158,12 +1158,20 @@ export function readSessionCookie(req) {
 export function makeAuthHook(pool, { cookieSecure = true } = {}) {
   return async function authHook(req, reply) {
     const token = readSessionCookie(req);
-    const sess = await lookupAuthSession(pool, token);
+    let sess;
+    try {
+      sess = await lookupAuthSession(pool, token);
+    } catch (err) {
+      req.log.error({ err }, 'auth: session lookup failed');
+      req.user = null;
+      return;
+    }
     if (sess) {
       req.user = { id: Number(sess.user_id), username: sess.username, sessionToken: token };
-      // Rolling session: bump expiry on every authenticated request.
-      const newExpiry = await bumpAuthSession(pool, token);
-      setSessionCookie(reply, token, newExpiry, { secure: cookieSecure });
+      // Rolling session: bump expiry asynchronously. Failure is logged but never aborts the request.
+      bumpAuthSession(pool, token)
+        .then((newExpiry) => setSessionCookie(reply, token, newExpiry, { secure: cookieSecure }))
+        .catch((err) => req.log.warn({ err }, 'auth: session bump failed'));
     } else {
       req.user = null;
     }

@@ -1414,6 +1414,7 @@ Path: `C:\Users\stjia\zetachad_mul\server\src\index.js`
 
 ```js
 import Fastify from 'fastify';
+import { pathToFileURL } from 'node:url';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import { makePool, migrate } from './db.js';
@@ -1471,7 +1472,7 @@ async function main() {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     console.error(err);
     process.exit(1);

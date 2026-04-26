@@ -1,0 +1,29 @@
+[Unit]
+Description=zetachad_mul Fastify server
+Wants=network-online.target postgresql.service
+After=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=zetachad
+Group=zetachad
+WorkingDirectory=/srv/zetachad/server
+EnvironmentFile=/etc/zetachad/env
+ExecStart=/usr/bin/node src/index.js
+Restart=on-failure
+RestartSec=2s
+LimitNOFILE=65536
+
+# Hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/srv/zetachad/server
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

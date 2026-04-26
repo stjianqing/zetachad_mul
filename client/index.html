@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>ZetaChad — multiplayer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">ZetaChad</a>
+    <nav>
+      <a href="leaderboard.html">Leaderboard</a>
+      <span id="user-area"></span>
+    </nav>
+  </header>
+  <main id="app" class="narrow">
+    <h1>Multiplayer drill</h1>
+
+    <span class="eligibility-badge" id="eligibility">leaderboard-eligible</span>
+
+    <div class="default-summary">
+      <strong>Default run:</strong> all four ops · 120 s ·
+      add 2–100 · sub 2–100 · mul 2–12×2–100 · div 2–12×2–100.
+      Only default runs qualify for the leaderboard.
+    </div>
+
+    <div class="landing-buttons">
+      <button class="primary" id="start-user">Start as User</button>
+      <button class="secondary" id="start-guest">Start as Guest</button>
+    </div>
+
+    <details class="advanced-disclosure" id="advanced">
+      <summary>Show advanced (custom settings)</summary>
+      <div class="settings-grid" id="settings-grid">
+        <fieldset class="op-card" data-op="add" style="--i: 0">
+          <legend><label><input type="checkbox" name="add_enabled" checked /> <span class="op-sym">+</span> Addition</label></legend>
+          <div class="range">
+            <label>min <input type="number" name="add_min" min="0" max="9999" value="2" /></label>
+            <label>max <input type="number" name="add_max" min="0" max="9999" value="100" /></label>
+          </div>
+        </fieldset>
+        <fieldset class="op-card" data-op="sub" style="--i: 1">
+          <legend><label><input type="checkbox" name="sub_enabled" checked /> <span class="op-sym">−</span> Subtraction</label></legend>
+          <div class="range">
+            <label>min <input type="number" name="sub_min" min="0" max="9999" value="2" /></label>
+            <label>max <input type="number" name="sub_max" min="0" max="9999" value="100" /></label>
+          </div>
+          <p class="hint">Generated to keep results ≥ 0.</p>
+        </fieldset>
+        <fieldset class="op-card" data-op="mul" style="--i: 2">
+          <legend><label><input type="checkbox" name="mul_enabled" checked /> <span class="op-sym">×</span> Multiplication</label></legend>
+          <div class="range">
+            <label>lhs min <input type="number" name="mul_lhsMin" min="0" max="9999" value="2" /></label>
+            <label>lhs max <input type="number" name="mul_lhsMax" min="0" max="9999" value="12" /></label>
+          </div>
+          <div class="range-pair">
+            <div class="range">
+              <label>rhs min <input type="number" name="mul_rhsMin" min="0" max="9999" value="2" /></label>
+              <label>rhs max <input type="number" name="mul_rhsMax" min="0" max="9999" value="100" /></label>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="op-card" data-op="div" style="--i: 3">
+          <legend><label><input type="checkbox" name="div_enabled" checked /> <span class="op-sym">÷</span> Division</label></legend>
+          <div class="range">
+            <label>lhs min <input type="number" name="div_lhsMin" min="0" max="9999" value="2" /></label>
+            <label>lhs max <input type="number" name="div_lhsMax" min="0" max="9999" value="12" /></label>
+          </div>
+          <div class="range-pair">
+            <div class="range">
+              <label>rhs min <input type="number" name="div_rhsMin" min="0" max="9999" value="2" /></label>
+              <label>rhs max <input type="number" name="div_rhsMax" min="0" max="9999" value="100" /></label>
+            </div>
+          </div>
+          <p class="hint">Integer answers only.</p>
+        </fieldset>
+        <fieldset class="op-card duration-card" style="--i: 4">
+          <legend><span class="op-sym">⧗</span> Duration</legend>
+          <div class="range">
+            <label>seconds <input type="number" name="duration" min="5" max="3600" value="120" /></label>
+          </div>
+          <div class="quick-picks">
+            <button type="button" data-secs="30">30 s</button>
+            <button type="button" data-secs="60">60 s</button>
+            <button type="button" data-secs="120">120 s</button>
+            <button type="button" data-secs="300">5 min</button>
+          </div>
+        </fieldset>
+      </div>
+    </details>
+  </main>
+  <script type="module" src="js/landing.js"></script>
+</body>
+</html>

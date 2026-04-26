@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Drill — ZetaChad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="drilling">
+  <div class="time-bar"><div class="time-bar-fill" id="time-bar-fill"></div></div>
+  <main id="app" class="play-shell">
+    <div class="drill-bar">
+      <div class="score">Score <span id="score">0</span></div>
+      <div class="timer" id="timer">120</div>
+    </div>
+
+    <form id="answer-form" class="prompt" autocomplete="off">
+      <span id="prompt-text">— —</span>
+      <input id="answer" name="answer" type="text" inputmode="numeric" pattern="[0-9-]*" autocomplete="off" enterkeyhint="go" autofocus />
+    </form>
+
+    <section id="score-screen" class="hidden narrow">
+      <h1>Time!</h1>
+      <div class="big-score" id="final-score">0</div>
+      <div id="post-note" class="score-note"></div>
+      <div class="actions">
+        <button class="primary" id="play-again">Play again</button>
+        <a class="secondary" href="leaderboard.html">Leaderboard</a>
+        <a class="secondary" href="index.html">Home</a>
+      </div>
+    </section>
+
+    <div id="modal-root"></div>
+  </main>
+  <script type="module" src="js/play.js"></script>
+</body>
+</html>

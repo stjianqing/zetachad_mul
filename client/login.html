@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Log in — ZetaChad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">ZetaChad</a>
+    <nav>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="register.html">Register</a>
+    </nav>
+  </header>
+  <main id="app" class="narrow">
+    <h1>Log in</h1>
+    <form id="login-form" class="auth-form" autocomplete="on">
+      <label>Username
+        <input name="username" type="text" autocomplete="username" autocapitalize="none" required />
+      </label>
+      <label>Password
+        <input name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <div class="form-error"></div>
+      <button class="primary" type="submit">Log in</button>
+    </form>
+  </main>
+  <script type="module">
+    import { wireLoginForm } from './js/auth.js';
+    document.addEventListener('DOMContentLoaded', wireLoginForm);
+  </script>
+</body>
+</html>

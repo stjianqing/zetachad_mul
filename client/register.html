@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Register — ZetaChad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">ZetaChad</a>
+    <nav>
+      <a href="leaderboard.html">Leaderboard</a>
+      <a href="login.html">Log in</a>
+    </nav>
+  </header>
+  <main id="app" class="narrow">
+    <h1>Register</h1>
+    <form id="register-form" class="auth-form" autocomplete="on">
+      <label>Username
+        <input name="username" type="text" autocomplete="username" minlength="3" maxlength="20" pattern="[A-Za-z0-9_-]{3,20}" autocapitalize="none" required />
+      </label>
+      <label>Password
+        <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+      </label>
+      <div class="form-error"></div>
+      <button class="primary" type="submit">Register</button>
+    </form>
+  </main>
+  <script type="module">
+    import { wireRegisterForm } from './js/auth.js';
+    document.addEventListener('DOMContentLoaded', wireRegisterForm);
+  </script>
+</body>
+</html>

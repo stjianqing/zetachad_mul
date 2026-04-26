@@ -197,9 +197,9 @@ Path: `C:\Users\stjia\zetachad_mul\server\package.json`
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "test": "node --test test/",
-    "test:unit": "node --test test/unit/",
-    "test:integration": "node --test test/integration/",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:unit": "node --test \"test/unit/**/*.test.js\"",
+    "test:integration": "node --test \"test/integration/**/*.test.js\"",
     "migrate": "node src/db.js migrate"
   },
   "dependencies": {

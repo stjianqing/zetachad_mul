@@ -44,7 +44,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       sessions.set(sessionId, session);
       return {
         sessionId,
-        question: { prompt: session.currentQuestion.prompt, op: session.currentQuestion.op, answer: session.currentQuestion.answer },
+        question: { prompt: session.currentQuestion.prompt, op: session.currentQuestion.op },
         timeLimitMs: session.durationMs
       };
     },

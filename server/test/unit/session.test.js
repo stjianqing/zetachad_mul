@@ -24,10 +24,10 @@ test('start returns a session id, first question, and time_limit_ms', () => {
 test('answer grades, increments score, returns next question and remaining time', () => {
   const clock = fakeClock(1_000_000);
   const store = createSessionStore({ now: clock.now, rngSeed: 1 });
-  const { sessionId, question } = store.start({ userId: 7, config: DEFAULT_CONFIG });
+  const { sessionId } = store.start({ userId: 7, config: DEFAULT_CONFIG });
 
   clock.advance(1500);
-  const correctAnswer = String(question.answer);
+  const correctAnswer = String(store.get(sessionId).currentQuestion.answer);
   const r = store.answer(sessionId, correctAnswer);
   assert.equal(r.correct, true);
   assert.equal(r.score, 1);
@@ -47,10 +47,10 @@ test('wrong answer leaves score unchanged', () => {
 test('answer after time_up returns time_up:true and final_score', () => {
   const clock = fakeClock(1_000_000);
   const store = createSessionStore({ now: clock.now, rngSeed: 1 });
-  const { sessionId, question } = store.start({ userId: 7, config: DEFAULT_CONFIG });
+  const { sessionId } = store.start({ userId: 7, config: DEFAULT_CONFIG });
 
   // Answer one correctly inside the time window
-  store.answer(sessionId, String(question.answer));
+  store.answer(sessionId, String(store.get(sessionId).currentQuestion.answer));
 
   clock.advance(120_001);
   const r = store.answer(sessionId, '0');
@@ -67,8 +67,8 @@ test('answer with unknown sessionId returns null', () => {
 test('finish returns finalScore, durationMs, qualifies (default config + userId)', () => {
   const clock = fakeClock(1_000_000);
   const store = createSessionStore({ now: clock.now, rngSeed: 1 });
-  const { sessionId, question } = store.start({ userId: 7, config: DEFAULT_CONFIG });
-  store.answer(sessionId, String(question.answer));
+  const { sessionId } = store.start({ userId: 7, config: DEFAULT_CONFIG });
+  store.answer(sessionId, String(store.get(sessionId).currentQuestion.answer));
   clock.advance(120_001);
   const r = store.finish(sessionId);
   assert.equal(r.finalScore, 1);

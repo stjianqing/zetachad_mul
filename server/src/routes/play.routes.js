@@ -57,8 +57,9 @@ export default async function playRoutes(fastify, { sessionStore, pool }) {
     const rec = sessionStore.takeRunRecord(sessionId);
     if (!rec || rec.userId == null || rec.attempts.length === 0) return;
 
-    const client = await pool.connect();
+    let client;
     try {
+      client = await pool.connect();
       await client.query('BEGIN');
       const insRun = await client.query(
         'INSERT INTO runs (user_id, score, duration_ms) VALUES ($1, $2, $3) RETURNING id',
@@ -83,10 +84,12 @@ export default async function playRoutes(fastify, { sessionStore, pool }) {
       const live = sessionStore.get(sessionId);
       if (live) live.runId = runId;
     } catch (err) {
-      try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+      if (client) {
+        try { await client.query('ROLLBACK'); } catch { /* ignore */ }
+      }
       req.log.error({ err }, 'analytics: failed to persist run + attempts');
     } finally {
-      client.release();
+      if (client) client.release();
     }
   }
 }

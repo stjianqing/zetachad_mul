@@ -168,19 +168,18 @@ test('time-up on logged-in default-config run inserts runs + attempts in one tra
   t.after(() => app.close());
 
   const cookie = await registerAndCookie(app, 'alice');
-  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-  cfg.durationMs = 50;
-  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: cfg }, headers: { cookie } });
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG }, headers: { cookie } });
   const { session_id } = start.json();
 
-  // Answer a few questions quickly so we have attempts to flush.
+  // Answer a few questions so we have attempts to flush.
   for (let i = 0; i < 3; i++) {
     const cur = sessionStore.get(session_id).currentQuestion;
     await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: String(cur.answer) }, headers: { cookie } });
   }
 
-  await new Promise(r => setTimeout(r, 80));
-
+  // Force time-up by rewinding startedAt so the next answer triggers the flush.
+  const sess = sessionStore.get(session_id);
+  sess.startedAt = Date.now() - sess.durationMs - 1;
   const tu = await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
   assert.equal(tu.statusCode, 200);
   assert.equal(tu.json().time_up, true);

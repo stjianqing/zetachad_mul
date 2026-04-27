@@ -24,7 +24,7 @@ const state = {
   startedAt: 0,
   finished: false,
   finalScore: 0,
-  currentExpectedDigits: 0,
+  currentAnswer: null,
   timerExpired: false
 };
 
@@ -88,7 +88,7 @@ async function start() {
   state.startedAt = performance.now();
   els.prompt().textContent = r.question.prompt;
   els.timer().textContent = Math.ceil(r.time_limit_ms / 1000);
-  state.currentExpectedDigits = r.question.expected_digits;
+  state.currentAnswer = r.question.answer;
   requestAnimationFrame(tickClock);
 }
 
@@ -106,7 +106,7 @@ async function submitAnswer() {
   els.score().textContent = r.score;
   state.finalScore = r.score;
   els.prompt().textContent = r.next_question.prompt;
-  state.currentExpectedDigits = r.next_question.expected_digits;
+  state.currentAnswer = r.next_question.answer;
   if (r.correct) {
     els.input().classList.add('correct');
     setTimeout(() => els.input().classList.remove('correct'), 220);
@@ -115,9 +115,10 @@ async function submitAnswer() {
 
 function onInput() {
   if (state.finished || state.timerExpired) return;
+  if (state.currentAnswer == null) return;
   const value = els.input().value;
-  if (!/^\d+$/.test(value)) return;
-  if (value.length !== state.currentExpectedDigits) return;
+  if (!/^-?\d+$/.test(value)) return;
+  if (Number(value) !== state.currentAnswer) return;
   submitAnswer();
 }
 

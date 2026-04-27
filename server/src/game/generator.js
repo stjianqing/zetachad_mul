@@ -59,5 +59,5 @@ export function generate(config, rng) {
       throw new Error(`unknown op: ${op}`);
   }
 
-  return { ...result, expectedDigits: String(result.answer).length };
+  return result;
 }

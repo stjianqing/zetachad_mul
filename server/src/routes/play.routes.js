@@ -16,7 +16,7 @@ export default async function playRoutes(fastify, { sessionStore }) {
       question: {
         prompt: r.question.prompt,
         op: r.question.op,
-        expected_digits: r.question.expectedDigits
+        answer: r.question.answer
       },
       time_limit_ms: r.timeLimitMs
     };
@@ -33,7 +33,7 @@ export default async function playRoutes(fastify, { sessionStore }) {
       next_question: {
         prompt: r.nextQuestion.prompt,
         op: r.nextQuestion.op,
-        expected_digits: r.nextQuestion.expectedDigits
+        answer: r.nextQuestion.answer
       },
       score: r.score,
       time_remaining_ms: r.timeRemainingMs

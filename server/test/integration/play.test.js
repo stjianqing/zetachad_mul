@@ -107,7 +107,7 @@ test('user A cannot submit user B\'s session', async (t) => {
   assert.equal(sub.statusCode, 403);
 });
 
-test('start response includes expected_digits on the question', async (t) => {
+test('start response includes answer on the question (used by client local grading)', async (t) => {
   if (skipIfNoDb(t)) return;
   const { app, sessionStore } = await freshApp();
   t.after(() => app.close());
@@ -115,15 +115,14 @@ test('start response includes expected_digits on the question', async (t) => {
   const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG } });
   assert.equal(start.statusCode, 200);
   const body = start.json();
-  assert.equal(typeof body.question.expected_digits, 'number');
-  assert.ok(body.question.expected_digits >= 1);
+  assert.equal(typeof body.question.answer, 'number');
 
   // Sanity: matches the in-memory session
   const session = sessionStore.get(body.session_id);
-  assert.equal(body.question.expected_digits, String(session.currentQuestion.answer).length);
+  assert.equal(body.question.answer, session.currentQuestion.answer);
 });
 
-test('answer response includes expected_digits on next_question', async (t) => {
+test('answer response includes answer on next_question', async (t) => {
   if (skipIfNoDb(t)) return;
   const { app, sessionStore } = await freshApp();
   t.after(() => app.close());
@@ -137,7 +136,7 @@ test('answer response includes expected_digits on next_question', async (t) => {
     payload: { session_id, answer: String(session.currentQuestion.answer) }
   });
   assert.equal(ans.statusCode, 200);
-  assert.equal(typeof ans.json().next_question.expected_digits, 'number');
+  assert.equal(typeof ans.json().next_question.answer, 'number');
 });
 
 test('empty-string answer past deadline returns time_up:true (used by client timer-expiry)', async (t) => {

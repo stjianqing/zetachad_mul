@@ -47,7 +47,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         question: {
           prompt: session.currentQuestion.prompt,
           op: session.currentQuestion.op,
-          expectedDigits: session.currentQuestion.expectedDigits
+          answer: session.currentQuestion.answer
         },
         timeLimitMs: session.durationMs
       };
@@ -71,7 +71,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         nextQuestion: {
           prompt: session.currentQuestion.prompt,
           op: session.currentQuestion.op,
-          expectedDigits: session.currentQuestion.expectedDigits
+          answer: session.currentQuestion.answer
         },
         score: session.score,
         timeRemainingMs: Math.max(0, session.durationMs - elapsed)

@@ -2,21 +2,18 @@
 
 **Last updated:** 2026-04-27
 **Current branch:** `main`
-**Last commit:** `6cf6056` (Task 8 async fix)
+**Last commit:** `c08491a` (Task 21 docs)
+**Status:** All 22 plan tasks implemented. Server-side tests green (39 unit pass, 32 integration skip locally). Manual smoke checklist below remains for post-deploy verification on the VPS.
 
 ## How to resume
 
-In a fresh Claude Code session, run:
+Implementation is complete. The remaining work is operational:
 
-```
-/superpowers:subagent-driven-development
-```
+1. **Deploy** by running `./deploy/deploy.sh` (with `VPS_HOST` set), then SSH to the VPS and run the htpasswd bootstrap documented in `deploy/README.md` § 12.
+2. **Run integration tests with a real DB** to verify the 32 skipped integration tests pass — either set `TEST_DATABASE_URL` locally or run on the VPS.
+3. **Walk the manual smoke checklist** from the plan's Task 22 (also in this file's "Smoke checklist" section below).
 
-with arguments:
-
-> Plan: `C:\Users\stjia\zetachad_mul\docs\superpowers\plans\2026-04-27-analytics.md`. Spec: `C:\Users\stjia\zetachad_mul\docs\superpowers\specs\2026-04-27-analytics-design.md`. Repo: `C:\Users\stjia\zetachad_mul`. Resume from Task 7 — Tasks 1–6 are already done and committed on main. See `docs/superpowers/plans/2026-04-27-analytics-status.md` for what's done and the conventions to follow.
-
-Tell the controller to read this file before dispatching anything. It contains conventions and gotchas the original implementer agents needed.
+If you need to re-enter implementation mode for a follow-up change, run `/superpowers:subagent-driven-development` with the original plan + spec paths.
 
 ---
 
@@ -33,24 +30,29 @@ Tell the controller to read this file before dispatching anything. It contains c
 | 7 | Submit becomes flag flip; leaderboard filters by flag | `7acc88a` + `ad14da8` (plan + comment polish) |
 | 8 | `requireAdmin` preHandler | `255e11d` + `6cf6056` (async fix) |
 | 9 | `GET /admin/api/players` (with Task-6 test fix) | `a7df51e` (test fix) + `dbdca09` (route) |
+| 10 | `GET /admin/api/runs` | `0f99eaa` |
+| 11 | `GET /admin/api/runs/:id/attempts` | `c05236f` |
+| 12 | `GET /admin/api/per-op` | `0ab74f6` |
+| 13 | `GET /admin/api/heatmap` | `8935927` |
+| 14 | `GET /admin/api/weak-spots` | `e52c844` |
+| 15 | `GET /admin/api/score-timeseries` | `8898158` |
+| 16 | Admin client shell + CSS + API wrapper | `515f571` |
+| 17 | Heatmap + chart renderers | `30f5060` |
+| 18 | Admin dashboard controller | `e41518d` |
+| 19 | Nginx admin location blocks | `37bfd6e` |
+| 20 | `deploy.sh` rsync admin client | `79aa1a2` |
+| 21 | htpasswd bootstrap docs | `c08491a` |
+| 22 | Full server test suite verified green | (this status file) |
 
-## Tasks remaining
+## Smoke checklist (manual, post-deploy)
 
-| # | Task | Approx. complexity |
-|---|---|---|
-| 10 | `GET /admin/api/runs` | Small |
-| 11 | `GET /admin/api/runs/:id/attempts` | Small |
-| 12 | `GET /admin/api/per-op` | Small |
-| 13 | `GET /admin/api/heatmap` | Small |
-| 14 | `GET /admin/api/weak-spots` | Small |
-| 15 | `GET /admin/api/score-timeseries` | Small |
-| 16 | Admin client shell + CSS + API wrapper | Small (3 files, no logic) |
-| 17 | Heatmap + chart renderers | Medium |
-| 18 | Admin dashboard controller | Medium (wires everything) |
-| 19 | Nginx admin location blocks | Trivial |
-| 20 | `deploy.sh` rsync admin client | Trivial |
-| 21 | htpasswd bootstrap docs | Trivial |
-| 22 | Full test suite + smoke checklist | Trivial (just runs) |
+After deploying, verify on `https://SUBDOMAIN.duckdns.org`:
+
+1. Log in as a real user, finish a drill, click Submit. `GET /admin/api/runs?user_id=X` shows the run.
+2. Log in, finish a drill, click "No thanks" on the submit modal. The run appears in `/admin/api/runs` but **not** on `/api/leaderboard`.
+3. Play a guest run: nothing in `/admin/api/runs`.
+4. Visit `/admin/` without credentials: nginx Basic Auth prompt appears. Wrong password → reject. Right password → page loads.
+5. On the dashboard: switch player picker, switch window selector, click a sessions row to expand, hover a heatmap cell. Everything renders without console errors.
 
 ## Conventions and gotchas (carry forward)
 
@@ -68,7 +70,7 @@ These were discovered during Tasks 1–6. New implementer subagents should be to
 ## Test status as of last commit
 
 - Unit tests: **39 pass / 0 fail** (`node --test test/unit/*.test.js` from `server/`)
-- Integration tests: **23 skip / 0 fail** (no `TEST_DATABASE_URL`; this is correct behavior — they will run on the VPS or when a test DB is configured). 21 pre-Task-9 + 2 new admin tests.
+- Integration tests: **32 skip / 0 fail** locally (no `TEST_DATABASE_URL`; this is correct behavior — they will run on the VPS or when a test DB is configured). Breakdown: 5 auth + 13 play + 3 leaderboard + 11 admin = 32.
 
 ## Bug found in plan during Task 6
 

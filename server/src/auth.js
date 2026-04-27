@@ -78,6 +78,9 @@ export function readSessionCookie(req) {
 }
 
 // Fastify decorator-style: req.user is set if cookie is valid.
+const BUMP_MIN_INTERVAL_MS = 60 * 1000;
+const lastBumpAt = new Map();
+
 export function makeAuthHook(pool, { cookieSecure = true } = {}) {
   return async function authHook(req, reply) {
     const token = readSessionCookie(req);
@@ -91,17 +94,21 @@ export function makeAuthHook(pool, { cookieSecure = true } = {}) {
     }
     if (sess) {
       req.user = { id: Number(sess.user_id), username: sess.username, sessionToken: token };
-      // Rolling session: bump expiry asynchronously. Failure is logged but never aborts the request.
-      bumpAuthSession(pool, token)
-        .then((newExpiry) => setSessionCookie(reply, token, newExpiry, { secure: cookieSecure }))
-        .catch((err) => req.log.warn({ err }, 'auth: session bump failed'));
+      const now = Date.now();
+      const last = lastBumpAt.get(token) ?? 0;
+      if (now - last >= BUMP_MIN_INTERVAL_MS) {
+        lastBumpAt.set(token, now);
+        bumpAuthSession(pool, token)
+          .then((newExpiry) => setSessionCookie(reply, token, newExpiry, { secure: cookieSecure }))
+          .catch((err) => req.log.warn({ err }, 'auth: session bump failed'));
+      }
     } else {
       req.user = null;
     }
   };
 }
 
-export function requireAuth(req, reply) {
+export async function requireAuth(req, reply) {
   if (!req.user) {
     reply.code(401).send({ error: 'auth_required' });
     return reply;

@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-27
 **Current branch:** `main`
-**Last commit:** `<docs-fix-sha>` (plan + comment polish for Task 7)
+**Last commit:** `ad14da8` (plan + comment polish for Task 7)
 
 ## How to resume
 
@@ -30,7 +30,7 @@ Tell the controller to read this file before dispatching anything. It contains c
 | 4 | Stage per-question attempts in session store (logged-in default-config only) | `87d9e4a` |
 | 5 | `takeRunRecord` on session store | `847c359` |
 | 6 | Time-up flush in `play.routes.js` (with bug fix) | `ff03d52` + `c69c855` (fix) + `16ad931` (plan update) |
-| 7 | Submit becomes flag flip; leaderboard filters by flag | `7acc88a` + `<docs-fix-sha>` (plan + comment polish) |
+| 7 | Submit becomes flag flip; leaderboard filters by flag | `7acc88a` + `ad14da8` (plan + comment polish) |
 
 ## Tasks remaining
 
@@ -78,7 +78,7 @@ If you read tasks out of order, the **fixed** version of `flushRunIfRecording` i
 
 ## Bug found in plan during Task 7
 
-The plan's Task 7 Step 1 prescribed a test using `cfg.durationMs = 50` + `setTimeout(80)`. This breaks `isDefaultConfig` so attempts aren't staged and `session.runId` stays null, making the test fail at `assert.equal(sub.statusCode, 200)`. **Fixed in commit `7acc88a`** (test rewinds `session.startedAt` on a `DEFAULT_CONFIG` session) and `<docs-fix-sha>` (plan update).
+The plan's Task 7 Step 1 prescribed a test using `cfg.durationMs = 50` + `setTimeout(80)`. This breaks `isDefaultConfig` so attempts aren't staged and `session.runId` stays null, making the test fail at `assert.equal(sub.statusCode, 200)`. **Fixed in commit `7acc88a`** (test rewinds `session.startedAt` on a `DEFAULT_CONFIG` session) and `ad14da8` (plan update).
 
 ## Subagent-driven development controller notes
 

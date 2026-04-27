@@ -31,8 +31,19 @@ function renderUserArea(user) {
     el.innerHTML = `<span class="user-chip">${user.username} <a href="#" id="logout">log out</a></span>`;
     document.getElementById('logout').addEventListener('click', async (e) => {
       e.preventDefault();
-      await api.logout();
-      location.reload();
+      const link = e.currentTarget;
+      if (link.dataset.busy === '1') return;
+      link.dataset.busy = '1';
+      const original = link.textContent;
+      link.textContent = 'logging out…';
+      link.style.pointerEvents = 'none';
+      try {
+        await api.logout();
+      } catch (ex) {
+        console.warn('logout request failed; navigating anyway', ex);
+      }
+      // Hard navigation rather than location.reload() to avoid any cached document state.
+      location.href = location.pathname;
     });
   } else {
     el.innerHTML = `<a href="login.html">Log in</a> <a href="register.html">Register</a>`;

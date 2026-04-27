@@ -157,3 +157,71 @@ test('empty-string answer past deadline returns time_up:true (used by client tim
   assert.equal(ans.json().time_up, true);
   assert.equal(typeof ans.json().final_score, 'number');
 });
+
+test('time-up on logged-in default-config run inserts runs + attempts in one transaction', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  cfg.durationMs = 50;
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: cfg }, headers: { cookie } });
+  const { session_id } = start.json();
+
+  // Answer a few questions quickly so we have attempts to flush.
+  for (let i = 0; i < 3; i++) {
+    const cur = sessionStore.get(session_id).currentQuestion;
+    await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: String(cur.answer) }, headers: { cookie } });
+  }
+
+  await new Promise(r => setTimeout(r, 80));
+
+  const tu = await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
+  assert.equal(tu.statusCode, 200);
+  assert.equal(tu.json().time_up, true);
+
+  const runs = await pool.query('SELECT id, user_id, score FROM runs');
+  assert.equal(runs.rows.length, 1);
+  const attempts = await pool.query('SELECT run_id, q_index, op FROM attempts ORDER BY q_index');
+  assert.equal(attempts.rows.length, 3);
+  assert.equal(Number(attempts.rows[0].run_id), Number(runs.rows[0].id));
+});
+
+test('time-up on guest run writes nothing', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  cfg.durationMs = 50;
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: cfg } });
+  const { session_id } = start.json();
+  await new Promise(r => setTimeout(r, 80));
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' } });
+
+  const runs = await pool.query('SELECT count(*)::int AS n FROM runs');
+  const attempts = await pool.query('SELECT count(*)::int AS n FROM attempts');
+  assert.equal(runs.rows[0].n, 0);
+  assert.equal(attempts.rows[0].n, 0);
+});
+
+test('time-up on custom-config logged-in run writes nothing', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  cfg.durationMs = 50;
+  cfg.ops.add.max = 50;  // makes the config non-default
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: cfg }, headers: { cookie } });
+  const { session_id } = start.json();
+  await new Promise(r => setTimeout(r, 80));
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
+
+  const runs = await pool.query('SELECT count(*)::int AS n FROM runs');
+  const attempts = await pool.query('SELECT count(*)::int AS n FROM attempts');
+  assert.equal(runs.rows[0].n, 0);
+  assert.equal(attempts.rows[0].n, 0);
+});

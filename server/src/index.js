@@ -18,7 +18,7 @@ export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessio
   app.addHook('preHandler', makeAuthHook(pool, { cookieSecure }));
 
   await app.register(authRoutes, { pool, cookieSecure });
-  await app.register(playRoutes, { sessionStore });
+  await app.register(playRoutes, { sessionStore, pool });
   await app.register(boardRoutes, { pool, sessionStore });
 
   app.get('/api/health', async () => ({ ok: true }));

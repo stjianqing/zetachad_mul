@@ -233,4 +233,52 @@ export default async function adminRoutes(fastify, { pool }) {
       }))
     };
   });
+
+  fastify.get('/admin/api/weak-spots', async (req) => {
+    const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
+    const params = [];
+    let where = '';
+    if (userId != null && Number.isFinite(userId)) {
+      params.push(userId);
+      where = 'WHERE r.user_id = $1';
+    }
+    const { rows } = await pool.query(
+      `SELECT
+         a.op                                                          AS op,
+         a.lhs                                                          AS lhs,
+         a.rhs                                                          AS rhs,
+         COUNT(*)::int                                                  AS attempts,
+         AVG(a.response_ms)::float                                      AS mean_response_ms,
+         (100.0 * SUM(CASE WHEN a.correct THEN 1 ELSE 0 END) / COUNT(*))::float AS accuracy_pct
+       FROM attempts a
+       JOIN runs r ON r.id = a.run_id
+       ${where}
+       GROUP BY a.op, a.lhs, a.rhs
+       HAVING COUNT(*) >= 10`,
+      params
+    );
+
+    const slowest = [...rows]
+      .sort((a, b) => b.mean_response_ms - a.mean_response_ms)
+      .slice(0, 10)
+      .map(r => ({
+        op: r.op,
+        lhs: r.lhs,
+        rhs: r.rhs,
+        attempts: r.attempts,
+        mean_response_ms: Math.round(r.mean_response_ms)
+      }));
+    const least_accurate = [...rows]
+      .sort((a, b) => a.accuracy_pct - b.accuracy_pct)
+      .slice(0, 10)
+      .map(r => ({
+        op: r.op,
+        lhs: r.lhs,
+        rhs: r.rhs,
+        attempts: r.attempts,
+        accuracy_pct: Math.round(r.accuracy_pct * 10) / 10
+      }));
+
+    return { slowest, least_accurate };
+  });
 }

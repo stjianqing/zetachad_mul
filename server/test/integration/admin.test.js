@@ -174,3 +174,17 @@ test('GET /admin/api/heatmap rejects op outside add/sub/mul/div', async (t) => {
   const r = await app.inject({ method: 'GET', url: '/admin/api/heatmap?op=junk', headers: { authorization: BASIC_HEADER } });
   assert.equal(r.statusCode, 400);
 });
+
+test('GET /admin/api/weak-spots returns slowest and least_accurate arrays', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  await playOneShortRun(app, sessionStore, cookie);
+
+  const r = await app.inject({ method: 'GET', url: '/admin/api/weak-spots', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.ok(Array.isArray(body.slowest));
+  assert.ok(Array.isArray(body.least_accurate));
+});

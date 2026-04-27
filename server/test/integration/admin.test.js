@@ -48,3 +48,43 @@ test('GET /admin/api/players returns aggregated player stats', async (t) => {
   assert.equal(typeof p.total_attempts, 'number');
   assert.ok(p.total_attempts >= 1);
 });
+
+test('GET /admin/api/runs without user_id returns all runs with aggregates', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  await playOneShortRun(app, sessionStore, cookie);
+
+  const r = await app.inject({ method: 'GET', url: '/admin/api/runs', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.runs.length, 1);
+  assert.equal(body.total, 1);
+  const run = body.runs[0];
+  assert.equal(run.username, 'alice');
+  assert.equal(typeof run.run_id, 'number');
+  assert.equal(typeof run.score, 'number');
+  assert.equal(typeof run.duration_ms, 'number');
+  assert.equal(typeof run.played_at, 'string');
+  assert.equal(typeof run.submitted_to_leaderboard, 'boolean');
+  assert.equal(typeof run.attempts_count, 'number');
+  assert.equal(typeof run.accuracy_pct, 'number');
+  assert.equal(typeof run.mean_response_ms, 'number');
+});
+
+test('GET /admin/api/runs?user_id filters to a single user', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const aliceCookie = await registerAndCookie(app, 'alice');
+  const bobCookie = await registerAndCookie(app, 'bob');
+  await playOneShortRun(app, sessionStore, aliceCookie);
+  await playOneShortRun(app, sessionStore, bobCookie);
+
+  const r = await app.inject({ method: 'GET', url: '/admin/api/runs?user_id=1', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.runs.length, 1);
+  assert.equal(body.runs[0].username, 'alice');
+});

@@ -22,7 +22,12 @@ rsync -az --delete \
 
 echo "==> Syncing client/ to $VPS_HOST:/var/www/zetachad/client/"
 rsync -az --delete \
+  --exclude admin \
   ./client/ "$VPS_HOST:/var/www/zetachad/client/"
+
+echo "==> Syncing client/admin/ to $VPS_HOST:/var/www/zetachad/admin/"
+rsync -az --delete \
+  ./client/admin/ "$VPS_HOST:/var/www/zetachad/admin/"
 
 echo "==> Installing prod deps + migrating + restarting"
 ssh "$VPS_HOST" "set -euo pipefail

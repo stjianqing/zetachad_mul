@@ -23,7 +23,8 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
     }
 
     if (session.runId == null) {
-      // Time-up flush failed (DB error logged at that point) — caller should retry.
+      // Time-up flush failed (logged at flush time). This session's analytics
+      // are unrecoverable — submit cannot re-attempt the flush. Rare; logged for follow-up.
       return reply.code(409).send({ error: 'not_finalized' });
     }
 

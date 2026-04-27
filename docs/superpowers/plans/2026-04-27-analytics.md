@@ -649,14 +649,14 @@ test('submit flips submitted_to_leaderboard; unsubmitted runs do not appear on l
   t.after(() => app.close());
 
   const cookie = await registerAndCookie(app, 'alice');
-  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-  cfg.durationMs = 50;
-  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: cfg }, headers: { cookie } });
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG }, headers: { cookie } });
   const { session_id } = start.json();
 
   const cur = sessionStore.get(session_id).currentQuestion;
   await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: String(cur.answer) }, headers: { cookie } });
-  await new Promise(r => setTimeout(r, 80));
+  // Force time-up by rewinding startedAt so the next answer triggers the flush.
+  const sess = sessionStore.get(session_id);
+  sess.startedAt = Date.now() - sess.durationMs - 1;
   await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
 
   // Before submit: run exists with flag=false, leaderboard is empty.
@@ -678,11 +678,13 @@ test('submit flips submitted_to_leaderboard; unsubmitted runs do not appear on l
 });
 ```
 
+**Note:** The original plan used `cfg.durationMs = 50` + `setTimeout(80)` to trigger time-up. This was found to be incorrect during implementation: setting `durationMs = 50` makes `isDefaultConfig(cfg)` return false, so `recordsAttempts` returns false, no attempts are staged, no time-up flush runs, `session.runId` stays null, and submit returns 409 instead of 200. The committed test uses a `DEFAULT_CONFIG` session and rewinds `session.startedAt` to force time-up without altering the config.
+
 - [ ] **Step 2: Run test to verify it fails**
 
 Run (from `server/`): `node --test test/integration/play.test.js`
 
-Expected: failure on `assert.equal(before.rows.length, 1)` — current code does NOT persist on time-up *via the submit endpoint anymore*; rather the failure is on `before.rows[0].submitted_to_leaderboard` being `undefined` (column exists but submit currently re-INSERTs and would make a second runs row). The exact message will depend on which assertion trips first. The point is: the new submit flow doesn't exist yet.
+Expected: the test fails because `board.routes.js` still does an INSERT (not an UPDATE of `submitted_to_leaderboard`), so `before.rows[0].submitted_to_leaderboard` will be false but `sub.statusCode` will not be 200 — submit will return 409 since `session.runId` is null (the old submit path tries to insert a new run, not flip the flag on the one written by the time-up flush). The point is: the new submit flow doesn't exist yet.
 
 - [ ] **Step 3: Replace `board.routes.js` contents**
 

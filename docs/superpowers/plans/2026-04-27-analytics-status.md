@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-27
 **Current branch:** `main`
-**Last commit:** `16ad931` (plan update for Task 6 bug fix)
+**Last commit:** `<docs-fix-sha>` (plan + comment polish for Task 7)
 
 ## How to resume
 
@@ -30,12 +30,12 @@ Tell the controller to read this file before dispatching anything. It contains c
 | 4 | Stage per-question attempts in session store (logged-in default-config only) | `87d9e4a` |
 | 5 | `takeRunRecord` on session store | `847c359` |
 | 6 | Time-up flush in `play.routes.js` (with bug fix) | `ff03d52` + `c69c855` (fix) + `16ad931` (plan update) |
+| 7 | Submit becomes flag flip; leaderboard filters by flag | `7acc88a` + `<docs-fix-sha>` (plan + comment polish) |
 
 ## Tasks remaining
 
 | # | Task | Approx. complexity |
 |---|---|---|
-| 7 | Submit becomes flag flip; leaderboard filters by flag | Medium |
 | 8 | `requireAdmin` preHandler | Trivial |
 | 9 | `GET /admin/api/players` | Small (route + 2 tests) |
 | 10 | `GET /admin/api/runs` | Small |
@@ -68,13 +68,17 @@ These were discovered during Tasks 1–6. New implementer subagents should be to
 ## Test status as of last commit
 
 - Unit tests: **39 pass / 0 fail** (`node --test test/unit/` from `server/`)
-- Integration tests: **12 skip / 0 fail** (no `TEST_DATABASE_URL`; this is correct behavior — they will run on the VPS or when a test DB is configured)
+- Integration tests: **21 skip / 0 fail** (no `TEST_DATABASE_URL`; this is correct behavior — they will run on the VPS or when a test DB is configured)
 
 ## Bug found in plan during Task 6
 
 The plan's Task 6 Step 3 originally had `pool.connect()` outside the try block in `flushRunIfRecording`. If `pool.connect()` threw (DB unreachable / pool exhausted), the error escaped to Fastify and the player would see HTTP 500 instead of `time_up: true`. **Fixed in commit `c69c855`** (code) and `16ad931` (plan).
 
 If you read tasks out of order, the **fixed** version of `flushRunIfRecording` is the one that's currently in the plan and in `play.routes.js`. Don't reintroduce the bug.
+
+## Bug found in plan during Task 7
+
+The plan's Task 7 Step 1 prescribed a test using `cfg.durationMs = 50` + `setTimeout(80)`. This breaks `isDefaultConfig` so attempts aren't staged and `session.runId` stays null, making the test fail at `assert.equal(sub.statusCode, 200)`. **Fixed in commit `7acc88a`** (test rewinds `session.startedAt` on a `DEFAULT_CONFIG` session) and `<docs-fix-sha>` (plan update).
 
 ## Subagent-driven development controller notes
 

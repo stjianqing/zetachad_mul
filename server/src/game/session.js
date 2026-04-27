@@ -27,6 +27,10 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
     return { prompt: q.prompt, op: q.op, answer: q.answer };
   }
 
+  function recordsAttempts(session) {
+    return session.userId != null && isDefaultConfig(session.config);
+  }
+
   return {
     start({ userId, config }) {
       const sessionId = makeId();
@@ -43,7 +47,10 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         currentQuestion: null,
         peekQuestion: null,
         rng,
-        finalized: false
+        finalized: false,
+        attempts: [],
+        lastQuestionAskedAt: startedAt,
+        runId: null
       };
       session.currentQuestion = generate(session.config, session.rng);
       session.peekQuestion = generate(session.config, session.rng);
@@ -68,6 +75,21 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       }
       const { correct } = grade(session.currentQuestion, userAnswer);
       if (correct) session.score += 1;
+      if (recordsAttempts(session)) {
+        const q = session.currentQuestion;
+        session.attempts.push({
+          qIndex: session.attempts.length,
+          op: q.op,
+          lhs: q.a,
+          rhs: q.b,
+          answer: q.answer,
+          userAnswer,
+          responseMs: t - session.lastQuestionAskedAt,
+          correct,
+          askedAt: new Date(session.lastQuestionAskedAt)
+        });
+      }
+      session.lastQuestionAskedAt = t;
       // Advance: the previous peek becomes the new current; generate a fresh peek.
       session.currentQuestion = session.peekQuestion;
       session.peekQuestion = newQuestion(session);

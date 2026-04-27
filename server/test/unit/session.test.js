@@ -158,3 +158,44 @@ test('peek returned by start matches next_question returned by the next answer',
   const answerResult = store.answer(startResult.sessionId, '0');
   assert.deepEqual(answerResult.nextQuestion, peekFromStart);
 });
+
+test('attempts not staged for guest sessions', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const { sessionId } = store.start({ userId: null, config: DEFAULT_CONFIG });
+  store.answer(sessionId, '0');
+  const s = store.get(sessionId);
+  assert.equal(s.attempts.length, 0);
+});
+
+test('attempts not staged for custom-config sessions', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  cfg.durationMs = 60_000;
+  const { sessionId } = store.start({ userId: 7, config: cfg });
+  store.answer(sessionId, '0');
+  const s = store.get(sessionId);
+  assert.equal(s.attempts.length, 0);
+});
+
+test('attempts staged for logged-in default-config sessions with correct fields', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const { sessionId } = store.start({ userId: 7, config: DEFAULT_CONFIG });
+  const q1 = store.get(sessionId).currentQuestion;
+  clock.advance(1500);
+  store.answer(sessionId, String(q1.answer));
+  const s = store.get(sessionId);
+  assert.equal(s.attempts.length, 1);
+  const a = s.attempts[0];
+  assert.equal(a.qIndex, 0);
+  assert.equal(a.op, q1.op);
+  assert.equal(a.lhs, q1.a);
+  assert.equal(a.rhs, q1.b);
+  assert.equal(a.answer, q1.answer);
+  assert.equal(a.userAnswer, String(q1.answer));
+  assert.equal(a.responseMs, 1500);
+  assert.equal(a.correct, true);
+  assert.ok(a.askedAt instanceof Date);
+});

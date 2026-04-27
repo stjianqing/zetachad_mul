@@ -22,25 +22,29 @@ export function generate(config, rng) {
 
   const op = enabled[intInRange(rng, 0, enabled.length - 1)];
 
+  let result;
   switch (op) {
     case 'add': {
       const { min, max } = config.ops.add;
       const a = intInRange(rng, min, max);
       const b = intInRange(rng, min, max);
-      return { op, a, b, answer: a + b, prompt: `${a} + ${b}` };
+      result = { op, a, b, answer: a + b, prompt: `${a} + ${b}` };
+      break;
     }
     case 'sub': {
       const { min, max } = config.ops.sub;
       let a = intInRange(rng, min, max);
       let b = intInRange(rng, min, max);
       if (a < b) [a, b] = [b, a];
-      return { op, a, b, answer: a - b, prompt: `${a} − ${b}` };
+      result = { op, a, b, answer: a - b, prompt: `${a} − ${b}` };
+      break;
     }
     case 'mul': {
       const { lhsMin, lhsMax, rhsMin, rhsMax } = config.ops.mul;
       const a = intInRange(rng, lhsMin, lhsMax);
       const b = intInRange(rng, rhsMin, rhsMax);
-      return { op, a, b, answer: a * b, prompt: `${a} × ${b}` };
+      result = { op, a, b, answer: a * b, prompt: `${a} × ${b}` };
+      break;
     }
     case 'div': {
       const { lhsMin, lhsMax, rhsMin, rhsMax } = config.ops.div;
@@ -48,9 +52,12 @@ export function generate(config, rng) {
       const quotient = intInRange(rng, rhsMin, rhsMax);
       const divisor = intInRange(rng, lhsMin, lhsMax);
       const dividend = quotient * divisor;
-      return { op, a: dividend, b: divisor, answer: quotient, prompt: `${dividend} ÷ ${divisor}` };
+      result = { op, a: dividend, b: divisor, answer: quotient, prompt: `${dividend} ÷ ${divisor}` };
+      break;
     }
     default:
       throw new Error(`unknown op: ${op}`);
   }
+
+  return { ...result, expectedDigits: String(result.answer).length };
 }

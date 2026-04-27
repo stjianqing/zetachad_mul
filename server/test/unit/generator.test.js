@@ -90,3 +90,28 @@ test('generate throws when no op is enabled', () => {
   };
   assert.throws(() => generate(cfg, makeRng(1)), /no ops enabled/i);
 });
+
+test('generate returns expectedDigits = String(answer).length', () => {
+  const cfg = {
+    ops: { add: { enabled: true, min: 1, max: 9 }, sub: { enabled: false }, mul: { enabled: false }, div: { enabled: false } },
+    durationMs: 60_000
+  };
+  const rng = makeRng(1);
+  for (let i = 0; i < 30; i++) {
+    const q = generate(cfg, rng);
+    assert.equal(q.expectedDigits, String(q.answer).length, `answer=${q.answer} expectedDigits=${q.expectedDigits}`);
+  }
+});
+
+test('generate expectedDigits handles multi-digit answers (mul)', () => {
+  const cfg = {
+    ops: { add: { enabled: false }, sub: { enabled: false }, mul: { enabled: true, lhsMin: 11, lhsMax: 12, rhsMin: 11, rhsMax: 12 }, div: { enabled: false } },
+    durationMs: 60_000
+  };
+  const rng = makeRng(2);
+  // 11*11=121, 12*12=144 — all 3-digit answers
+  for (let i = 0; i < 10; i++) {
+    const q = generate(cfg, rng);
+    assert.equal(q.expectedDigits, 3);
+  }
+});

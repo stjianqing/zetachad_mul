@@ -45,6 +45,10 @@ test('logged-in default-config run can submit; appears on leaderboard', async (t
   const correctAnswer = String(session.currentQuestion.answer);
   await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: correctAnswer }, headers: { cookie } });
 
+  // Force time-up by rewinding startedAt so the next answer triggers the flush.
+  session.startedAt = Date.now() - session.durationMs - 1;
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
+
   const sub = await app.inject({ method: 'POST', url: '/api/leaderboard/submit', payload: { session_id }, headers: { cookie } });
   assert.equal(sub.statusCode, 200);
   assert.equal(sub.json().ok, true);
@@ -224,4 +228,38 @@ test('time-up on custom-config logged-in run writes nothing', async (t) => {
   const attempts = await pool.query('SELECT count(*)::int AS n FROM attempts');
   assert.equal(runs.rows[0].n, 0);
   assert.equal(attempts.rows[0].n, 0);
+});
+
+test('submit flips submitted_to_leaderboard; unsubmitted runs do not appear on leaderboard', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG }, headers: { cookie } });
+  const { session_id } = start.json();
+
+  const cur = sessionStore.get(session_id).currentQuestion;
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: String(cur.answer) }, headers: { cookie } });
+  // Force time-up by rewinding startedAt so the next answer triggers the flush.
+  const sess = sessionStore.get(session_id);
+  sess.startedAt = Date.now() - sess.durationMs - 1;
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
+
+  // Before submit: run exists with flag=false, leaderboard is empty.
+  const before = await pool.query('SELECT submitted_to_leaderboard FROM runs');
+  assert.equal(before.rows.length, 1);
+  assert.equal(before.rows[0].submitted_to_leaderboard, false);
+  const lbBefore = await app.inject({ method: 'GET', url: '/api/leaderboard' });
+  assert.equal(lbBefore.json().entries.length, 0);
+
+  // Submit flips the flag.
+  const sub = await app.inject({ method: 'POST', url: '/api/leaderboard/submit', payload: { session_id }, headers: { cookie } });
+  assert.equal(sub.statusCode, 200);
+  assert.equal(sub.json().rank, 1);
+  const after = await pool.query('SELECT submitted_to_leaderboard FROM runs');
+  assert.equal(after.rows[0].submitted_to_leaderboard, true);
+  const lbAfter = await app.inject({ method: 'GET', url: '/api/leaderboard' });
+  assert.equal(lbAfter.json().entries.length, 1);
+  assert.equal(lbAfter.json().entries[0].username, 'alice');
 });

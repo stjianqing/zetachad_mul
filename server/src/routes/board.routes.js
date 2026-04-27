@@ -22,20 +22,30 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
       return { ok: true, rank: session.lastRank, idempotent: true };
     }
 
-    const ins = await pool.query(
-      `INSERT INTO runs (user_id, score, duration_ms) VALUES ($1, $2, $3)
-       RETURNING id, played_at`,
-      [req.user.id, finished.finalScore, finished.durationMs]
+    if (session.runId == null) {
+      // Time-up flush failed (DB error logged at that point) — caller should retry.
+      return reply.code(409).send({ error: 'not_finalized' });
+    }
+
+    await pool.query(
+      'UPDATE runs SET submitted_to_leaderboard = true WHERE id = $1',
+      [session.runId]
     );
 
-    // Compute rank: number of users whose best score is strictly greater, plus 1.
+    // Compute rank: number of users whose best submitted score is strictly greater, plus 1.
     const { rows } = await pool.query(
       `WITH best AS (
-         SELECT user_id, MAX(score) AS s FROM runs GROUP BY user_id
+         SELECT user_id, MAX(score) AS s
+         FROM runs
+         WHERE submitted_to_leaderboard = true
+         GROUP BY user_id
        )
        SELECT COUNT(*) + 1 AS rank
        FROM best
-       WHERE s > (SELECT MAX(score) FROM runs WHERE user_id = $1)`,
+       WHERE s > (
+         SELECT MAX(score) FROM runs
+         WHERE user_id = $1 AND submitted_to_leaderboard = true
+       )`,
       [req.user.id]
     );
     const rank = Number(rows[0].rank);
@@ -43,7 +53,7 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
     session.submitted = true;
     session.lastRank = rank;
 
-    return { ok: true, rank, run_id: Number(ins.rows[0].id) };
+    return { ok: true, rank, run_id: session.runId };
   });
 
   fastify.get('/api/leaderboard', async () => {
@@ -52,6 +62,7 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
        FROM (
          SELECT DISTINCT ON (user_id) user_id, score, played_at
          FROM runs
+         WHERE submitted_to_leaderboard = true
          ORDER BY user_id, score DESC, played_at ASC
        ) b
        JOIN users u ON u.id = b.user_id

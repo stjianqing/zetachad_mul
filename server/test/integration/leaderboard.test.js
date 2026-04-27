@@ -15,6 +15,10 @@ async function playAndSubmit(app, sessionStore, cookie, correctCount) {
     const session = sessionStore.get(session_id);
     await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: String(session.currentQuestion.answer) }, headers: { cookie } });
   }
+  // Force time-up by rewinding startedAt so elapsed >= durationMs on the next answer call.
+  const sess = sessionStore.get(session_id);
+  sess.startedAt = Date.now() - sess.durationMs - 1;
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
   const sub = await app.inject({ method: 'POST', url: '/api/leaderboard/submit', payload: { session_id }, headers: { cookie } });
   return { session_id, sub };
 }

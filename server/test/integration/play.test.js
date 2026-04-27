@@ -106,3 +106,55 @@ test('user A cannot submit user B\'s session', async (t) => {
   const sub = await app.inject({ method: 'POST', url: '/api/leaderboard/submit', payload: { session_id }, headers: { cookie: cookieB } });
   assert.equal(sub.statusCode, 403);
 });
+
+test('start response includes expected_digits on the question', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG } });
+  assert.equal(start.statusCode, 200);
+  const body = start.json();
+  assert.equal(typeof body.question.expected_digits, 'number');
+  assert.ok(body.question.expected_digits >= 1);
+
+  // Sanity: matches the in-memory session
+  const session = sessionStore.get(body.session_id);
+  assert.equal(body.question.expected_digits, String(session.currentQuestion.answer).length);
+});
+
+test('answer response includes expected_digits on next_question', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG } });
+  const { session_id } = start.json();
+  const session = sessionStore.get(session_id);
+
+  const ans = await app.inject({
+    method: 'POST', url: '/api/play/answer',
+    payload: { session_id, answer: String(session.currentQuestion.answer) }
+  });
+  assert.equal(ans.statusCode, 200);
+  assert.equal(typeof ans.json().next_question.expected_digits, 'number');
+});
+
+test('empty-string answer past deadline returns time_up:true (used by client timer-expiry)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+
+  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  cfg.durationMs = 50; // 50ms drill — deadline passes quickly
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: cfg } });
+  const { session_id } = start.json();
+
+  // Wait past the deadline.
+  await new Promise(r => setTimeout(r, 80));
+
+  const ans = await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' } });
+  assert.equal(ans.statusCode, 200);
+  assert.equal(ans.json().time_up, true);
+  assert.equal(typeof ans.json().final_score, 'number');
+});

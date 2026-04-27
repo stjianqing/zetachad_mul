@@ -11,7 +11,15 @@ export default async function playRoutes(fastify, { sessionStore }) {
       return reply.code(400).send({ error: 'invalid_config' });
     }
     const r = sessionStore.start({ userId: req.user?.id ?? null, config });
-    return { session_id: r.sessionId, question: r.question, time_limit_ms: r.timeLimitMs };
+    return {
+      session_id: r.sessionId,
+      question: {
+        prompt: r.question.prompt,
+        op: r.question.op,
+        expected_digits: r.question.expectedDigits
+      },
+      time_limit_ms: r.timeLimitMs
+    };
   });
 
   fastify.post('/api/play/answer', { config: { rateLimit: answerLimit } }, async (req, reply) => {
@@ -22,7 +30,11 @@ export default async function playRoutes(fastify, { sessionStore }) {
     if (r.timeUp) return { time_up: true, final_score: r.finalScore };
     return {
       correct: r.correct,
-      next_question: r.nextQuestion,
+      next_question: {
+        prompt: r.nextQuestion.prompt,
+        op: r.nextQuestion.op,
+        expected_digits: r.nextQuestion.expectedDigits
+      },
       score: r.score,
       time_remaining_ms: r.timeRemainingMs
     };

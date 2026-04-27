@@ -1,11 +1,12 @@
 const API_BASE = '/api';
 
 async function request(method, path, body) {
+  const hasBody = body != null;
   const res = await fetch(API_BASE + path, {
     method,
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json' },
-    body: body == null ? undefined : JSON.stringify(body)
+    headers: hasBody ? { 'Content-Type': 'application/json' } : {},
+    body: hasBody ? JSON.stringify(body) : undefined
   });
   let data = null;
   try { data = await res.json(); } catch { /* no body */ }

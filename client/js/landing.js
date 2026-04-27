@@ -84,13 +84,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Buttons.
   document.getElementById('start-guest').addEventListener('click', () => startGame('guest'));
   document.getElementById('start-user').addEventListener('click', async () => {
+    // Persist the chosen config before any redirect, so play.html finds it
+    // whether the user is already logged in or has to round-trip through login.
+    const advancedOpen = document.getElementById('advanced').open;
+    const config = advancedOpen ? readCustomConfig() : DEFAULT_CONFIG;
+    sessionStorage.setItem('zc_config', JSON.stringify(config));
+    sessionStorage.setItem('zc_mode', 'user');
+
     let me = null;
     try { me = (await api.me()).user; } catch { /* network */ }
     if (!me) {
       location.href = `login.html?next=${encodeURIComponent('play')}`;
       return;
     }
-    startGame('user');
+    location.href = 'play.html';
   });
 
   // Top-right user area.

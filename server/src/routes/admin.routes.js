@@ -281,4 +281,42 @@ export default async function adminRoutes(fastify, { pool }) {
 
     return { slowest, least_accurate };
   });
+
+  fastify.get('/admin/api/score-timeseries', async (req, reply) => {
+    const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
+    const window = req.query.window ?? 'all';
+    if (!['7', '30', 'all'].includes(window)) {
+      return reply.code(400).send({ error: 'bad_window' });
+    }
+    const params = [];
+    const wheres = [];
+    if (userId != null && Number.isFinite(userId)) {
+      params.push(userId);
+      wheres.push(`r.user_id = $${params.length}`);
+    }
+    if (window === '7') wheres.push(`r.played_at >= now() - interval '7 days'`);
+    if (window === '30') wheres.push(`r.played_at >= now() - interval '30 days'`);
+    const whereSql = wheres.length ? 'WHERE ' + wheres.join(' AND ') : '';
+
+    const { rows } = await pool.query(
+      `SELECT
+         r.played_at                          AS played_at,
+         r.score                              AS score,
+         r.id::int                            AS run_id,
+         u.username                           AS username
+       FROM runs r
+       JOIN users u ON u.id = r.user_id
+       ${whereSql}
+       ORDER BY r.played_at ASC`,
+      params
+    );
+    return {
+      points: rows.map(p => ({
+        played_at: p.played_at.toISOString(),
+        score: p.score,
+        run_id: p.run_id,
+        username: p.username
+      }))
+    };
+  });
 }

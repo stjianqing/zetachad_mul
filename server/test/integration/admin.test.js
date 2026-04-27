@@ -188,3 +188,23 @@ test('GET /admin/api/weak-spots returns slowest and least_accurate arrays', asyn
   assert.ok(Array.isArray(body.slowest));
   assert.ok(Array.isArray(body.least_accurate));
 });
+
+test('GET /admin/api/score-timeseries returns one point per run, ascending', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  await playOneShortRun(app, sessionStore, cookie);
+  await playOneShortRun(app, sessionStore, cookie);
+
+  const r = await app.inject({ method: 'GET', url: '/admin/api/score-timeseries?window=all', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.points.length, 2);
+  const p = body.points[0];
+  assert.equal(typeof p.played_at, 'string');
+  assert.equal(typeof p.score, 'number');
+  assert.equal(typeof p.run_id, 'number');
+  assert.equal(p.username, 'alice');
+  assert.ok(new Date(body.points[0].played_at) <= new Date(body.points[1].played_at));
+});

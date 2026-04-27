@@ -199,3 +199,25 @@ test('attempts staged for logged-in default-config sessions with correct fields'
   assert.equal(a.correct, true);
   assert.ok(a.askedAt instanceof Date);
 });
+
+test('takeRunRecord returns staged data and clears attempts', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const { sessionId } = store.start({ userId: 7, config: DEFAULT_CONFIG });
+  clock.advance(1500);
+  store.answer(sessionId, String(store.get(sessionId).currentQuestion.answer));
+
+  const rec = store.takeRunRecord(sessionId);
+  assert.equal(rec.userId, 7);
+  assert.equal(rec.score, 1);
+  assert.equal(rec.attempts.length, 1);
+  assert.equal(typeof rec.durationMs, 'number');
+
+  // Subsequent call returns empty attempts
+  assert.equal(store.takeRunRecord(sessionId).attempts.length, 0);
+});
+
+test('takeRunRecord returns null for unknown session', () => {
+  const store = createSessionStore({ rngSeed: 1 });
+  assert.equal(store.takeRunRecord('nope'), null);
+});

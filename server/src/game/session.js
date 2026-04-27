@@ -113,6 +113,19 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       };
     },
 
+    takeRunRecord(sessionId) {
+      const session = sessions.get(sessionId);
+      if (!session) return null;
+      const attempts = session.attempts;
+      session.attempts = [];
+      return {
+        userId: session.userId,
+        score: session.score,
+        durationMs: session.durationMs,
+        attempts
+      };
+    },
+
     get(sessionId) {
       return sessions.get(sessionId) ?? null;
     },

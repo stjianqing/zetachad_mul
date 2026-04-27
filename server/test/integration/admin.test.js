@@ -88,3 +88,37 @@ test('GET /admin/api/runs?user_id filters to a single user', async (t) => {
   assert.equal(body.runs.length, 1);
   assert.equal(body.runs[0].username, 'alice');
 });
+
+test('GET /admin/api/runs/:id/attempts returns full question log', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  await playOneShortRun(app, sessionStore, cookie);
+
+  const list = await app.inject({ method: 'GET', url: '/admin/api/runs', headers: { authorization: BASIC_HEADER } });
+  const runId = list.json().runs[0].run_id;
+
+  const r = await app.inject({ method: 'GET', url: `/admin/api/runs/${runId}/attempts`, headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.run.run_id, runId);
+  assert.ok(body.attempts.length >= 1);
+  const a = body.attempts[0];
+  assert.equal(a.q_index, 0);
+  assert.ok(['add', 'sub', 'mul', 'div'].includes(a.op));
+  assert.equal(typeof a.lhs, 'number');
+  assert.equal(typeof a.rhs, 'number');
+  assert.equal(typeof a.answer, 'number');
+  assert.equal(typeof a.response_ms, 'number');
+  assert.equal(typeof a.correct, 'boolean');
+  assert.equal(typeof a.asked_at, 'string');
+});
+
+test('GET /admin/api/runs/:id/attempts returns 404 for unknown run', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+  const r = await app.inject({ method: 'GET', url: '/admin/api/runs/99999/attempts', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 404);
+});

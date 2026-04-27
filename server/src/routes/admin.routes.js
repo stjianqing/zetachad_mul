@@ -97,4 +97,65 @@ export default async function adminRoutes(fastify, { pool }) {
       total: tot[0].n
     };
   });
+
+  fastify.get('/admin/api/runs/:run_id/attempts', async (req, reply) => {
+    const runId = Number(req.params.run_id);
+    if (!Number.isFinite(runId)) return reply.code(400).send({ error: 'bad_request' });
+
+    const { rows: runRows } = await pool.query(
+      `SELECT
+         r.id::int                                                AS run_id,
+         r.user_id::int                                           AS user_id,
+         u.username                                               AS username,
+         r.score                                                  AS score,
+         r.duration_ms                                            AS duration_ms,
+         r.played_at                                              AS played_at,
+         r.submitted_to_leaderboard                               AS submitted_to_leaderboard,
+         COUNT(a.id)::int                                         AS attempts_count,
+         COALESCE(100.0 * SUM(CASE WHEN a.correct THEN 1 ELSE 0 END) / NULLIF(COUNT(a.id), 0), 0)::float AS accuracy_pct,
+         COALESCE(AVG(a.response_ms), 0)::float                   AS mean_response_ms
+       FROM runs r
+       JOIN users u ON u.id = r.user_id
+       LEFT JOIN attempts a ON a.run_id = r.id
+       WHERE r.id = $1
+       GROUP BY r.id, u.username`,
+      [runId]
+    );
+    if (runRows.length === 0) return reply.code(404).send({ error: 'unknown_run' });
+    const r0 = runRows[0];
+
+    const { rows: aRows } = await pool.query(
+      `SELECT q_index, op, lhs, rhs, answer, user_answer, response_ms, correct, asked_at
+       FROM attempts
+       WHERE run_id = $1
+       ORDER BY q_index ASC`,
+      [runId]
+    );
+
+    return {
+      run: {
+        run_id: r0.run_id,
+        user_id: r0.user_id,
+        username: r0.username,
+        score: r0.score,
+        duration_ms: r0.duration_ms,
+        played_at: r0.played_at.toISOString(),
+        submitted_to_leaderboard: r0.submitted_to_leaderboard,
+        attempts_count: r0.attempts_count,
+        accuracy_pct: Math.round(r0.accuracy_pct * 10) / 10,
+        mean_response_ms: Math.round(r0.mean_response_ms)
+      },
+      attempts: aRows.map(a => ({
+        q_index: a.q_index,
+        op: a.op,
+        lhs: a.lhs,
+        rhs: a.rhs,
+        answer: a.answer,
+        user_answer: a.user_answer,
+        response_ms: a.response_ms,
+        correct: a.correct,
+        asked_at: a.asked_at.toISOString()
+      }))
+    };
+  });
 }

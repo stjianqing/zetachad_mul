@@ -122,3 +122,24 @@ test('GET /admin/api/runs/:id/attempts returns 404 for unknown run', async (t) =
   const r = await app.inject({ method: 'GET', url: '/admin/api/runs/99999/attempts', headers: { authorization: BASIC_HEADER } });
   assert.equal(r.statusCode, 404);
 });
+
+test('GET /admin/api/per-op returns one row per op present in attempts', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  await playOneShortRun(app, sessionStore, cookie);
+
+  const r = await app.inject({ method: 'GET', url: '/admin/api/per-op', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.ok(Array.isArray(body.per_op));
+  assert.ok(body.per_op.length >= 1);
+  const row = body.per_op[0];
+  assert.ok(['add', 'sub', 'mul', 'div'].includes(row.op));
+  assert.equal(typeof row.attempts, 'number');
+  assert.equal(typeof row.correct, 'number');
+  assert.equal(typeof row.accuracy_pct, 'number');
+  assert.equal(typeof row.mean_response_ms, 'number');
+  assert.equal(typeof row.median_response_ms, 'number');
+});

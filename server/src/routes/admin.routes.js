@@ -158,4 +158,39 @@ export default async function adminRoutes(fastify, { pool }) {
       }))
     };
   });
+
+  fastify.get('/admin/api/per-op', async (req) => {
+    const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
+    const params = [];
+    let where = '';
+    if (userId != null && Number.isFinite(userId)) {
+      params.push(userId);
+      where = 'WHERE r.user_id = $1';
+    }
+    const { rows } = await pool.query(
+      `SELECT
+         a.op                                                            AS op,
+         COUNT(*)::int                                                   AS attempts,
+         SUM(CASE WHEN a.correct THEN 1 ELSE 0 END)::int                 AS correct,
+         (100.0 * SUM(CASE WHEN a.correct THEN 1 ELSE 0 END) / COUNT(*))::float AS accuracy_pct,
+         AVG(a.response_ms)::float                                       AS mean_response_ms,
+         (PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY a.response_ms))::float AS median_response_ms
+       FROM attempts a
+       JOIN runs r ON r.id = a.run_id
+       ${where}
+       GROUP BY a.op
+       ORDER BY a.op`,
+      params
+    );
+    return {
+      per_op: rows.map(r => ({
+        op: r.op,
+        attempts: r.attempts,
+        correct: r.correct,
+        accuracy_pct: Math.round(r.accuracy_pct * 10) / 10,
+        mean_response_ms: Math.round(r.mean_response_ms),
+        median_response_ms: Math.round(r.median_response_ms)
+      }))
+    };
+  });
 }

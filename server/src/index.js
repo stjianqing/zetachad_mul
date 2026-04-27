@@ -8,6 +8,7 @@ import { createSessionStore } from './game/session.js';
 import authRoutes from './routes/auth.routes.js';
 import playRoutes from './routes/play.routes.js';
 import boardRoutes from './routes/board.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 
 export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessionStore } = {}) {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
@@ -20,6 +21,7 @@ export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessio
   await app.register(authRoutes, { pool, cookieSecure });
   await app.register(playRoutes, { sessionStore, pool });
   await app.register(boardRoutes, { pool, sessionStore });
+  await app.register(adminRoutes, { pool });
 
   app.get('/api/health', async () => ({ ok: true }));
 

@@ -1,0 +1,50 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { freshApp, cookieFromResponse, skipIfNoDb } from './helper.js';
+import { DEFAULT_CONFIG } from '../../src/config.js';
+
+const BASIC_HEADER = 'Basic ' + Buffer.from('stjianqing:irrelevant').toString('base64');
+
+async function registerAndCookie(app, username) {
+  const r = await app.inject({ method: 'POST', url: '/api/register', payload: { username, password: 'password123' } });
+  return cookieFromResponse(r);
+}
+
+async function playOneShortRun(app, sessionStore, cookie) {
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG }, headers: { cookie } });
+  const { session_id } = start.json();
+  const cur = sessionStore.get(session_id).currentQuestion;
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: String(cur.answer) }, headers: { cookie } });
+  const sess = sessionStore.get(session_id);
+  sess.startedAt = Date.now() - sess.durationMs - 1;
+  await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
+  return session_id;
+}
+
+test('GET /admin/api/players returns 401 without Basic header', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+  const r = await app.inject({ method: 'GET', url: '/admin/api/players' });
+  assert.equal(r.statusCode, 401);
+});
+
+test('GET /admin/api/players returns aggregated player stats', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  await playOneShortRun(app, sessionStore, cookie);
+
+  const r = await app.inject({ method: 'GET', url: '/admin/api/players', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.players.length, 1);
+  const p = body.players[0];
+  assert.equal(p.username, 'alice');
+  assert.equal(p.run_count, 1);
+  assert.equal(typeof p.best_score, 'number');
+  assert.equal(typeof p.last_played_at, 'string');
+  assert.equal(typeof p.total_attempts, 'number');
+  assert.ok(p.total_attempts >= 1);
+});

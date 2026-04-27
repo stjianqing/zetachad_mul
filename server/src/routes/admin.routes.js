@@ -193,4 +193,44 @@ export default async function adminRoutes(fastify, { pool }) {
       }))
     };
   });
+
+  fastify.get('/admin/api/heatmap', async (req, reply) => {
+    const op = req.query.op;
+    if (!['add', 'sub', 'mul', 'div'].includes(op)) {
+      return reply.code(400).send({ error: 'bad_op' });
+    }
+    const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
+    const params = [op];
+    let where = 'WHERE a.op = $1';
+    if (userId != null && Number.isFinite(userId)) {
+      params.push(userId);
+      where += ' AND r.user_id = $2';
+    }
+    const { rows } = await pool.query(
+      `SELECT
+         a.lhs                                                          AS lhs,
+         a.rhs                                                          AS rhs,
+         COUNT(*)::int                                                  AS attempts,
+         SUM(CASE WHEN a.correct THEN 1 ELSE 0 END)::int                AS correct,
+         AVG(a.response_ms)::float                                      AS mean_response_ms,
+         (100.0 * SUM(CASE WHEN a.correct THEN 1 ELSE 0 END) / COUNT(*))::float AS accuracy_pct
+       FROM attempts a
+       JOIN runs r ON r.id = a.run_id
+       ${where}
+       GROUP BY a.lhs, a.rhs
+       ORDER BY a.lhs, a.rhs`,
+      params
+    );
+    return {
+      op,
+      cells: rows.map(c => ({
+        lhs: c.lhs,
+        rhs: c.rhs,
+        attempts: c.attempts,
+        correct: c.correct,
+        mean_response_ms: Math.round(c.mean_response_ms),
+        accuracy_pct: Math.round(c.accuracy_pct * 10) / 10
+      }))
+    };
+  });
 }

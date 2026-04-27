@@ -143,3 +143,34 @@ test('GET /admin/api/per-op returns one row per op present in attempts', async (
   assert.equal(typeof row.mean_response_ms, 'number');
   assert.equal(typeof row.median_response_ms, 'number');
 });
+
+test('GET /admin/api/heatmap?op=mul returns cells', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  for (let i = 0; i < 5; i++) await playOneShortRun(app, sessionStore, cookie);
+
+  const r = await app.inject({ method: 'GET', url: '/admin/api/heatmap?op=mul', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.op, 'mul');
+  assert.ok(Array.isArray(body.cells));
+  if (body.cells.length > 0) {
+    const c = body.cells[0];
+    assert.equal(typeof c.lhs, 'number');
+    assert.equal(typeof c.rhs, 'number');
+    assert.equal(typeof c.attempts, 'number');
+    assert.equal(typeof c.correct, 'number');
+    assert.equal(typeof c.mean_response_ms, 'number');
+    assert.equal(typeof c.accuracy_pct, 'number');
+  }
+});
+
+test('GET /admin/api/heatmap rejects op outside add/sub/mul/div', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+  const r = await app.inject({ method: 'GET', url: '/admin/api/heatmap?op=junk', headers: { authorization: BASIC_HEADER } });
+  assert.equal(r.statusCode, 400);
+});

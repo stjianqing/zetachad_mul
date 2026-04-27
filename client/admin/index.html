@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ZetaChad Admin</title>
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <header class="admin-bar">
+    <h1>ZetaChad Admin</h1>
+    <label>Player:
+      <select id="player-picker"></select>
+    </label>
+    <label>Window:
+      <select id="window-picker">
+        <option value="all">All time</option>
+        <option value="30">Last 30 days</option>
+        <option value="7">Last 7 days</option>
+      </select>
+    </label>
+  </header>
+
+  <main>
+    <section id="activity-section" class="hidden">
+      <h2>Activity (all players)</h2>
+      <table id="activity-table"></table>
+    </section>
+
+    <section>
+      <h2>Score over time</h2>
+      <div id="score-chart"></div>
+    </section>
+
+    <section>
+      <h2>Per-op summary</h2>
+      <div id="per-op-cards"></div>
+    </section>
+
+    <section>
+      <h2>Weak spots</h2>
+      <div class="weak-cols">
+        <div>
+          <h3>Slowest</h3>
+          <table id="slowest-table"></table>
+        </div>
+        <div>
+          <h3>Lowest accuracy</h3>
+          <table id="least-accurate-table"></table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Multiplication heatmap</h2>
+      <canvas id="heatmap-mul" width="990" height="110"></canvas>
+      <div id="heatmap-mul-tip" class="tip"></div>
+    </section>
+
+    <section>
+      <h2>Division heatmap</h2>
+      <canvas id="heatmap-div" width="990" height="110"></canvas>
+      <div id="heatmap-div-tip" class="tip"></div>
+    </section>
+
+    <section>
+      <h2>Sessions</h2>
+      <table id="sessions-table"></table>
+      <div id="session-detail"></div>
+    </section>
+  </main>
+
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

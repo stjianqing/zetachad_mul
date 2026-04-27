@@ -1,0 +1,26 @@
+* { box-sizing: border-box; }
+body { font-family: system-ui, sans-serif; margin: 0; background: #0e1117; color: #e6edf3; }
+.admin-bar { display: flex; align-items: center; gap: 16px; padding: 12px 24px; background: #161b22; border-bottom: 1px solid #30363d; }
+.admin-bar h1 { font-size: 18px; margin: 0; }
+.admin-bar label { font-size: 13px; }
+.admin-bar select { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; padding: 4px 8px; border-radius: 4px; }
+main { padding: 24px; max-width: 1100px; margin: 0 auto; }
+section { margin-bottom: 32px; }
+section h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.05em; color: #8b949e; margin: 0 0 12px; }
+.hidden { display: none; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #21262d; font-size: 13px; }
+th { color: #8b949e; font-weight: 500; }
+tr.expandable { cursor: pointer; }
+tr.expandable:hover { background: #161b22; }
+#per-op-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.op-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
+.op-card h4 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
+.op-card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.op-card dt { color: #8b949e; }
+.weak-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+canvas { background: #161b22; border: 1px solid #30363d; border-radius: 4px; display: block; }
+.tip { font-size: 12px; color: #8b949e; min-height: 18px; padding: 4px 0; }
+#session-detail { margin-top: 16px; padding: 12px; background: #161b22; border-radius: 6px; }
+#session-detail:empty { display: none; }
+#score-chart { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 12px; height: 220px; }

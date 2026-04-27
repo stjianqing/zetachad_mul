@@ -129,6 +129,41 @@ curl -i https://SUBDOMAIN.duckdns.org/    # should serve index.html
 
 Then from a browser, register an account, play a default-config run, submit, see yourself on the leaderboard.
 
+## 12. Admin dashboard setup (one-time)
+
+Create the admin dashboard directory and install Basic Auth credentials.
+
+```bash
+ssh root@87.99.158.208 'mkdir -p /var/www/zetachad/admin && chown -R www-data:www-data /var/www/zetachad/admin'
+```
+
+```bash
+ssh root@87.99.158.208 'apt-get install -y apache2-utils'
+```
+
+```bash
+ssh root@87.99.158.208 'htpasswd -cB /etc/nginx/zetachad-admin.htpasswd stjianqing'
+# Enter the admin password when prompted: tns6e123
+```
+
+```bash
+ssh root@87.99.158.208 'chown root:www-data /etc/nginx/zetachad-admin.htpasswd && chmod 640 /etc/nginx/zetachad-admin.htpasswd'
+```
+
+```bash
+ssh root@87.99.158.208 'nginx -t && systemctl reload nginx'
+```
+
+After this, `https://SUBDOMAIN.duckdns.org/admin/` will prompt for HTTP Basic Auth. Enter `stjianqing` / `tns6e123`.
+
+To rotate the password later:
+
+```bash
+ssh root@87.99.158.208 'htpasswd -B /etc/nginx/zetachad-admin.htpasswd stjianqing'
+```
+
+The dashboard data comes from `/admin/api/*` routes on the same domain, gated by the same Basic Auth.
+
 ## Operational notes
 
 - Logs: `journalctl -u zetachad -f`

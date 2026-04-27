@@ -19,7 +19,7 @@ export async function getPool() {
 export async function freshApp() {
   const pool = await getPool();
   if (!pool) return null;
-  await pool.query('TRUNCATE runs, auth_sessions, users RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE attempts, runs, auth_sessions, users RESTART IDENTITY CASCADE');
   const sessionStore = createSessionStore({});
   const app = await buildApp({
     pool,

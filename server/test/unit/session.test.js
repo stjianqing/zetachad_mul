@@ -113,3 +113,21 @@ test('get returns the session record while active', () => {
   assert.equal(s.userId, 7);
   assert.equal(s.score, 0);
 });
+
+test('start returns expectedDigits on the first question', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const r = store.start({ userId: null, config: DEFAULT_CONFIG });
+  const session = store.get(r.sessionId);
+  assert.equal(r.question.expectedDigits, session.currentQuestion.expectedDigits);
+  assert.equal(typeof r.question.expectedDigits, 'number');
+});
+
+test('answer returns expectedDigits on next question', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const { sessionId } = store.start({ userId: 7, config: DEFAULT_CONFIG });
+  const r = store.answer(sessionId, '0');
+  assert.equal(typeof r.nextQuestion.expectedDigits, 'number');
+  assert.ok(r.nextQuestion.expectedDigits >= 1);
+});

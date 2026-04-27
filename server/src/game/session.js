@@ -44,7 +44,11 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       sessions.set(sessionId, session);
       return {
         sessionId,
-        question: { prompt: session.currentQuestion.prompt, op: session.currentQuestion.op },
+        question: {
+          prompt: session.currentQuestion.prompt,
+          op: session.currentQuestion.op,
+          expectedDigits: session.currentQuestion.expectedDigits
+        },
         timeLimitMs: session.durationMs
       };
     },
@@ -64,7 +68,11 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       session.currentQuestion = newQuestion(session);
       return {
         correct,
-        nextQuestion: { prompt: session.currentQuestion.prompt, op: session.currentQuestion.op },
+        nextQuestion: {
+          prompt: session.currentQuestion.prompt,
+          op: session.currentQuestion.op,
+          expectedDigits: session.currentQuestion.expectedDigits
+        },
         score: session.score,
         timeRemainingMs: Math.max(0, session.durationMs - elapsed)
       };

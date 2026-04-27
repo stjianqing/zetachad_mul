@@ -23,7 +23,9 @@ const state = {
   timeLimitMs: 0,
   startedAt: 0,
   finished: false,
-  finalScore: 0
+  finalScore: 0,
+  currentExpectedDigits: 0,
+  timerExpired: false
 };
 
 function isDefaultConfig(c) {
@@ -69,12 +71,12 @@ async function start() {
   state.startedAt = performance.now();
   els.prompt().textContent = r.question.prompt;
   els.timer().textContent = Math.ceil(r.time_limit_ms / 1000);
+  state.currentExpectedDigits = r.question.expected_digits;
   requestAnimationFrame(tickClock);
 }
 
-async function onSubmit(e) {
-  e.preventDefault();
-  if (state.finished) return;
+async function submitAnswer() {
+  if (state.finished || state.timerExpired) return;
   const value = els.input().value;
   els.input().value = '';
   let r;
@@ -86,10 +88,19 @@ async function onSubmit(e) {
   if (r.time_up) return finish(r.final_score);
   els.score().textContent = r.score;
   els.prompt().textContent = r.next_question.prompt;
+  state.currentExpectedDigits = r.next_question.expected_digits;
   if (r.correct) {
     els.input().classList.add('correct');
     setTimeout(() => els.input().classList.remove('correct'), 220);
   }
+}
+
+function onInput() {
+  if (state.finished || state.timerExpired) return;
+  const value = els.input().value;
+  if (!/^\d+$/.test(value)) return;
+  if (value.length !== state.currentExpectedDigits) return;
+  submitAnswer();
 }
 
 function finish(finalScore) {
@@ -149,6 +160,7 @@ function showSubmitModal() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  els.form().addEventListener('submit', onSubmit);
+  els.form().addEventListener('submit', (e) => e.preventDefault());
+  els.input().addEventListener('input', onInput);
   start();
 });

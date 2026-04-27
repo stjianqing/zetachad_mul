@@ -49,7 +49,24 @@ function tickClock() {
   els.timer().textContent = Math.ceil(remaining / 1000);
   els.bar().style.transform = `scaleX(${remaining / state.timeLimitMs})`;
   if (remaining <= 10_000) els.timer().classList.add('low');
-  if (remaining > 0) requestAnimationFrame(tickClock);
+  if (remaining > 0) {
+    requestAnimationFrame(tickClock);
+  } else if (!state.timerExpired) {
+    state.timerExpired = true;
+    finalizeOnTimeout();
+  }
+}
+
+async function finalizeOnTimeout() {
+  let r;
+  try { r = await api.answer(state.sessionId, ''); }
+  catch (ex) {
+    // If the server is unreachable, still close the run with the last known score so the user isn't stuck.
+    finish(state.finalScore);
+    return;
+  }
+  if (r && r.time_up) finish(r.final_score);
+  else finish(state.finalScore);
 }
 
 async function start() {
@@ -87,6 +104,7 @@ async function submitAnswer() {
   }
   if (r.time_up) return finish(r.final_score);
   els.score().textContent = r.score;
+  state.finalScore = r.score;
   els.prompt().textContent = r.next_question.prompt;
   state.currentExpectedDigits = r.next_question.expected_digits;
   if (r.correct) {

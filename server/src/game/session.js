@@ -23,6 +23,10 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
     return generate(session.config, session.rng);
   }
 
+  function publicQuestion(q) {
+    return { prompt: q.prompt, op: q.op, answer: q.answer };
+  }
+
   return {
     start({ userId, config }) {
       const sessionId = makeId();
@@ -37,18 +41,17 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         durationMs: config.durationMs,
         score: 0,
         currentQuestion: null,
+        peekQuestion: null,
         rng,
         finalized: false
       };
       session.currentQuestion = generate(session.config, session.rng);
+      session.peekQuestion = generate(session.config, session.rng);
       sessions.set(sessionId, session);
       return {
         sessionId,
-        question: {
-          prompt: session.currentQuestion.prompt,
-          op: session.currentQuestion.op,
-          answer: session.currentQuestion.answer
-        },
+        question: publicQuestion(session.currentQuestion),
+        peekQuestion: publicQuestion(session.peekQuestion),
         timeLimitMs: session.durationMs
       };
     },
@@ -65,14 +68,13 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       }
       const { correct } = grade(session.currentQuestion, userAnswer);
       if (correct) session.score += 1;
-      session.currentQuestion = newQuestion(session);
+      // Advance: the previous peek becomes the new current; generate a fresh peek.
+      session.currentQuestion = session.peekQuestion;
+      session.peekQuestion = newQuestion(session);
       return {
         correct,
-        nextQuestion: {
-          prompt: session.currentQuestion.prompt,
-          op: session.currentQuestion.op,
-          answer: session.currentQuestion.answer
-        },
+        nextQuestion: publicQuestion(session.currentQuestion),
+        peekQuestion: publicQuestion(session.peekQuestion),
         score: session.score,
         timeRemainingMs: Math.max(0, session.durationMs - elapsed)
       };

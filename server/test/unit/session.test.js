@@ -130,3 +130,31 @@ test('answer returns answer on next question', () => {
   const r = store.answer(sessionId, '0');
   assert.equal(typeof r.nextQuestion.answer, 'number');
 });
+
+test('start returns a peek question alongside the current question', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const r = store.start({ userId: null, config: DEFAULT_CONFIG });
+  assert.equal(typeof r.peekQuestion.answer, 'number');
+  assert.equal(typeof r.peekQuestion.prompt, 'string');
+});
+
+test('answer returns a fresh peek alongside the next question', () => {
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const { sessionId } = store.start({ userId: 7, config: DEFAULT_CONFIG });
+  const r = store.answer(sessionId, '0');
+  assert.equal(typeof r.peekQuestion.answer, 'number');
+});
+
+test('peek returned by start matches next_question returned by the next answer', () => {
+  // Critical contract: the client renders peek synchronously when the user
+  // solves the current question, then expects the server to confirm that
+  // peek as the new current question on the next /answer response.
+  const clock = fakeClock(1_000_000);
+  const store = createSessionStore({ now: clock.now, rngSeed: 1 });
+  const startResult = store.start({ userId: null, config: DEFAULT_CONFIG });
+  const peekFromStart = startResult.peekQuestion;
+  const answerResult = store.answer(startResult.sessionId, '0');
+  assert.deepEqual(answerResult.nextQuestion, peekFromStart);
+});

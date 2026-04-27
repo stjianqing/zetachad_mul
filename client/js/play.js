@@ -25,6 +25,7 @@ const state = {
   finished: false,
   finalScore: 0,
   currentAnswer: null,
+  peekQuestion: null,  // { prompt, op, answer } — pre-fetched next question for instant advance
   timerExpired: false
 };
 
@@ -89,12 +90,57 @@ async function start() {
   els.prompt().textContent = r.question.prompt;
   els.timer().textContent = Math.ceil(r.time_limit_ms / 1000);
   state.currentAnswer = r.question.answer;
+  state.peekQuestion = r.peek_question;
   requestAnimationFrame(tickClock);
 }
 
-async function submitAnswer() {
+// Fast-path advance: when the user's input matches the current answer, swap
+// the prompt to the pre-fetched peek question synchronously (zero perceived
+// latency) and POST the answer to the server in the background. The server's
+// response refreshes the peek for the question after this one.
+//
+// Falls back to a synchronous round-trip if the peek isn't ready yet (rare —
+// would require the user to solve faster than one network round-trip).
+function submitCorrectAnswer(value) {
+  if (state.peekQuestion == null) {
+    // Peek hasn't arrived yet (the previous server response is still in flight).
+    // Fall back to the awaited path so we don't lose the answer.
+    return submitAnswerAwaited(value);
+  }
+  // Synchronous swap: advance the displayed question to the peek.
+  const advancedTo = state.peekQuestion;
+  state.currentAnswer = advancedTo.answer;
+  state.peekQuestion = null;  // marked in-flight; refilled when server responds
+  els.input().value = '';
+  els.prompt().textContent = advancedTo.prompt;
+  els.input().classList.add('correct');
+  setTimeout(() => els.input().classList.remove('correct'), 220);
+  // Background POST: brings back authoritative score + the next peek.
+  postAnswer(value);
+}
+
+async function postAnswer(value) {
+  let r;
+  try { r = await api.answer(state.sessionId, value); }
+  catch (ex) {
+    if (ex.status === 404) { alert('Server hiccuped — please start a new run.'); location.href = 'index.html'; return; }
+    // Network blip — the user has already advanced locally; we'll catch up on
+    // the next answer or at finalize. Don't block UI.
+    return;
+  }
+  if (r.time_up) return finish(r.final_score);
+  els.score().textContent = r.score;
+  state.finalScore = r.score;
+  // The server's `next_question` is what we already advanced to (the prior
+  // peek). The new `peek_question` is what comes AFTER that — store it for
+  // the next advance.
+  state.peekQuestion = r.peek_question;
+}
+
+// Awaited path used only when the peek isn't ready (degrades to pre-buffered
+// behavior: ~1 round-trip of perceived latency).
+async function submitAnswerAwaited(value) {
   if (state.finished || state.timerExpired) return;
-  const value = els.input().value;
   els.input().value = '';
   let r;
   try { r = await api.answer(state.sessionId, value); }
@@ -107,6 +153,7 @@ async function submitAnswer() {
   state.finalScore = r.score;
   els.prompt().textContent = r.next_question.prompt;
   state.currentAnswer = r.next_question.answer;
+  state.peekQuestion = r.peek_question;
   if (r.correct) {
     els.input().classList.add('correct');
     setTimeout(() => els.input().classList.remove('correct'), 220);
@@ -119,7 +166,7 @@ function onInput() {
   const value = els.input().value;
   if (!/^-?\d+$/.test(value)) return;
   if (Number(value) !== state.currentAnswer) return;
-  submitAnswer();
+  submitCorrectAnswer(value);
 }
 
 function finish(finalScore) {

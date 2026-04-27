@@ -18,6 +18,11 @@ export default async function playRoutes(fastify, { sessionStore }) {
         op: r.question.op,
         answer: r.question.answer
       },
+      peek_question: {
+        prompt: r.peekQuestion.prompt,
+        op: r.peekQuestion.op,
+        answer: r.peekQuestion.answer
+      },
       time_limit_ms: r.timeLimitMs
     };
   });
@@ -34,6 +39,11 @@ export default async function playRoutes(fastify, { sessionStore }) {
         prompt: r.nextQuestion.prompt,
         op: r.nextQuestion.op,
         answer: r.nextQuestion.answer
+      },
+      peek_question: {
+        prompt: r.peekQuestion.prompt,
+        op: r.peekQuestion.op,
+        answer: r.peekQuestion.answer
       },
       score: r.score,
       time_remaining_ms: r.timeRemainingMs

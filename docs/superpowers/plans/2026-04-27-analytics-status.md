@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-27
 **Current branch:** `main`
-**Last commit:** `<NEW_SHA>` (Task 8 async fix)
+**Last commit:** `6cf6056` (Task 8 async fix)
 
 ## How to resume
 
@@ -31,7 +31,7 @@ Tell the controller to read this file before dispatching anything. It contains c
 | 5 | `takeRunRecord` on session store | `847c359` |
 | 6 | Time-up flush in `play.routes.js` (with bug fix) | `ff03d52` + `c69c855` (fix) + `16ad931` (plan update) |
 | 7 | Submit becomes flag flip; leaderboard filters by flag | `7acc88a` + `ad14da8` (plan + comment polish) |
-| 8 | `requireAdmin` preHandler | `255e11d` + `<NEW_SHA>` (async fix) |
+| 8 | `requireAdmin` preHandler | `255e11d` + `6cf6056` (async fix) |
 | 9 | `GET /admin/api/players` (with Task-6 test fix) | `a7df51e` (test fix) + `dbdca09` (route) |
 
 ## Tasks remaining
@@ -84,7 +84,7 @@ The same `cfg.durationMs = 50` pattern was also broken in the existing Task-6 fl
 
 ## Bug found in plan during Task 8
 
-The plan's Task 8 defined `requireAdmin` as a sync function. Under Fastify v5, a sync preHandler that returns `undefined` on the success path causes the request to hang forever (the hook runner waits for a Promise or `done` callback that never arrives). The 401 path "works" only because `reply.send()` sets `reply.sent = true`, short-circuiting subsequent hook iterations. The same bug class was previously fixed for `requireAuth` in commit `edee926`. **Fixed in commit `<NEW_SHA>`** (added `async` keyword to `requireAdmin` and corresponding plan update).
+The plan's Task 8 defined `requireAdmin` as a sync function. Under Fastify v5, a sync preHandler that returns `undefined` on the success path causes the request to hang forever (the hook runner waits for a Promise or `done` callback that never arrives). The 401 path "works" only because `reply.send()` sets `reply.sent = true`, short-circuiting subsequent hook iterations. The same bug class was previously fixed for `requireAuth` in commit `edee926`. **Fixed in commit `6cf6056`** (added `async` keyword to `requireAdmin` and corresponding plan update).
 
 This bug was caught by the code-quality reviewer during Task 9, NOT by the local test run — locally the integration tests skip (no `TEST_DATABASE_URL`), so the 200-path test never executed. On the VPS, every authenticated admin request would hang until timeout. **Lesson: any new preHandler must be `async` (or return a Promise).**
 

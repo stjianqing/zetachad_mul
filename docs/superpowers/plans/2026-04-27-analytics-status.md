@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-04-27
 **Current branch:** `main`
-**Last commit:** `ad14da8` (plan + comment polish for Task 7)
+**Last commit:** `<NEW_SHA>` (Task 8 async fix)
 
 ## How to resume
 
@@ -31,13 +31,13 @@ Tell the controller to read this file before dispatching anything. It contains c
 | 5 | `takeRunRecord` on session store | `847c359` |
 | 6 | Time-up flush in `play.routes.js` (with bug fix) | `ff03d52` + `c69c855` (fix) + `16ad931` (plan update) |
 | 7 | Submit becomes flag flip; leaderboard filters by flag | `7acc88a` + `ad14da8` (plan + comment polish) |
+| 8 | `requireAdmin` preHandler | `255e11d` + `<NEW_SHA>` (async fix) |
+| 9 | `GET /admin/api/players` (with Task-6 test fix) | `a7df51e` (test fix) + `dbdca09` (route) |
 
 ## Tasks remaining
 
 | # | Task | Approx. complexity |
 |---|---|---|
-| 8 | `requireAdmin` preHandler | Trivial |
-| 9 | `GET /admin/api/players` | Small (route + 2 tests) |
 | 10 | `GET /admin/api/runs` | Small |
 | 11 | `GET /admin/api/runs/:id/attempts` | Small |
 | 12 | `GET /admin/api/per-op` | Small |
@@ -67,8 +67,8 @@ These were discovered during Tasks 1–6. New implementer subagents should be to
 
 ## Test status as of last commit
 
-- Unit tests: **39 pass / 0 fail** (`node --test test/unit/` from `server/`)
-- Integration tests: **21 skip / 0 fail** (no `TEST_DATABASE_URL`; this is correct behavior — they will run on the VPS or when a test DB is configured)
+- Unit tests: **39 pass / 0 fail** (`node --test test/unit/*.test.js` from `server/`)
+- Integration tests: **23 skip / 0 fail** (no `TEST_DATABASE_URL`; this is correct behavior — they will run on the VPS or when a test DB is configured). 21 pre-Task-9 + 2 new admin tests.
 
 ## Bug found in plan during Task 6
 
@@ -79,6 +79,14 @@ If you read tasks out of order, the **fixed** version of `flushRunIfRecording` i
 ## Bug found in plan during Task 7
 
 The plan's Task 7 Step 1 prescribed a test using `cfg.durationMs = 50` + `setTimeout(80)`. This breaks `isDefaultConfig` so attempts aren't staged and `session.runId` stays null, making the test fail at `assert.equal(sub.statusCode, 200)`. **Fixed in commit `7acc88a`** (test rewinds `session.startedAt` on a `DEFAULT_CONFIG` session) and `ad14da8` (plan update).
+
+The same `cfg.durationMs = 50` pattern was also broken in the existing Task-6 flush test (`play.test.js:165-193`) and in every Task-9-through-15 admin test that uses the `playOneShortRun` helper. **Fixed in commit `a7df51e`** (Task-6 test) and `dbdca09` (Task-9's `playOneShortRun` helper). Tasks 10–15 must continue to use the rewind-`startedAt` pattern; do NOT copy the plan's literal `cfg.durationMs = 50` helper.
+
+## Bug found in plan during Task 8
+
+The plan's Task 8 defined `requireAdmin` as a sync function. Under Fastify v5, a sync preHandler that returns `undefined` on the success path causes the request to hang forever (the hook runner waits for a Promise or `done` callback that never arrives). The 401 path "works" only because `reply.send()` sets `reply.sent = true`, short-circuiting subsequent hook iterations. The same bug class was previously fixed for `requireAuth` in commit `edee926`. **Fixed in commit `<NEW_SHA>`** (added `async` keyword to `requireAdmin` and corresponding plan update).
+
+This bug was caught by the code-quality reviewer during Task 9, NOT by the local test run — locally the integration tests skip (no `TEST_DATABASE_URL`), so the 200-path test never executed. On the VPS, every authenticated admin request would hang until timeout. **Lesson: any new preHandler must be `async` (or return a Promise).**
 
 ## Subagent-driven development controller notes
 

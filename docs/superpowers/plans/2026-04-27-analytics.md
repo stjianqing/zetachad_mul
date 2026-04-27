@@ -803,7 +803,10 @@ Create `server/src/admin-auth.js`:
 // that lack any Authorization: Basic header — meaning the request bypassed
 // nginx (e.g., direct hit to the Node port from inside the VPS).
 // We do NOT validate the password here; nginx already did.
-export function requireAdmin(req, reply) {
+// Must be async: Fastify v5's hook runner only advances on a returned Promise
+// or invoked done callback. A sync no-done preHandler hangs every authenticated
+// request — see commit edee926 for the same bug class fixed in requireAuth.
+export async function requireAdmin(req, reply) {
   const h = req.headers['authorization'];
   if (typeof h !== 'string' || !h.toLowerCase().startsWith('basic ')) {
     reply.code(401).send({ error: 'admin_auth_required' });
@@ -811,6 +814,8 @@ export function requireAdmin(req, reply) {
   }
 }
 ```
+
+**Note:** The original plan defined `requireAdmin` as a sync function. This was found to be incorrect during implementation: under Fastify v5, a sync preHandler that returns `undefined` on the success path causes the request to hang forever (the hook runner waits for a Promise or `done` callback that never arrives). The 401 path "works" only because `reply.send()` sets `reply.sent = true`, short-circuiting subsequent hook iterations. The same bug class was previously fixed for `requireAuth` in commit `edee926`. The committed `requireAdmin` is `async`.
 
 - [ ] **Step 2: Commit**
 

@@ -313,7 +313,8 @@ export default async function adminRoutes(fastify, { pool }) {
       return reply.code(400).send({ error: 'bad_op' });
     }
     const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
-    const limit = Math.min(20, Math.max(1, Number(req.query.limit ?? 8)));
+    const limitRaw = Number(req.query.limit ?? 8);
+    const limit = Math.min(20, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 8));
 
     const params = [op];
     const wheres = [`a.op = $1`];

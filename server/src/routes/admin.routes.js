@@ -194,6 +194,77 @@ export default async function adminRoutes(fastify, { pool }) {
     };
   });
 
+  fastify.get('/admin/api/engagement', async (req) => {
+    const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
+    const params = [];
+    let where = '';
+    if (userId != null && Number.isFinite(userId)) {
+      params.push(userId);
+      where = 'WHERE r.user_id = $1';
+    }
+
+    // Single roll-up query: total_runs, dau (SGT today), wau (last 7d), median (last 30d)
+    const { rows: aggRows } = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_runs,
+         COUNT(DISTINCT r.user_id) FILTER (
+           WHERE (r.played_at AT TIME ZONE 'Asia/Singapore')::date
+               = (now() AT TIME ZONE 'Asia/Singapore')::date
+         )::int AS dau,
+         COUNT(DISTINCT r.user_id) FILTER (
+           WHERE r.played_at >= now() - interval '7 days'
+         )::int AS wau,
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY r.score)
+           FILTER (WHERE r.played_at >= now() - interval '30 days') AS median_score_30d
+       FROM runs r
+       ${where}`,
+      params
+    );
+
+    // New players in last 7d: users whose first run is within the window
+    const { rows: newRows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM (
+         SELECT user_id, MIN(played_at) AS first_run
+         FROM runs r
+         ${where}
+         GROUP BY user_id
+       ) t WHERE t.first_run >= now() - interval '7 days'`,
+      params
+    );
+
+    // 30-day per-day run counts in SGT, padded to exactly 30 entries.
+    const { rows: dayRows } = await pool.query(
+      `SELECT
+         (r.played_at AT TIME ZONE 'Asia/Singapore')::date AS d,
+         COUNT(*)::int AS c
+       FROM runs r
+       ${where ? where + ' AND' : 'WHERE'} r.played_at >= now() - interval '30 days'
+       GROUP BY d
+       ORDER BY d ASC`,
+      params
+    );
+
+    const dayMap = new Map(dayRows.map(r => [r.d.toISOString().slice(0, 10), r.c]));
+    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));
+    const runs_per_day_30d = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      runs_per_day_30d.push({ date: key, count: dayMap.get(key) ?? 0 });
+    }
+
+    const a = aggRows[0];
+    return {
+      total_runs: a.total_runs,
+      dau: a.dau,
+      wau: a.wau,
+      new_players_7d: newRows[0].n,
+      median_score_30d: a.median_score_30d == null ? null : Math.round(Number(a.median_score_30d)),
+      runs_per_day_30d
+    };
+  });
+
   fastify.get('/admin/api/heatmap', async (req, reply) => {
     const op = req.query.op;
     if (!['add', 'sub', 'mul', 'div'].includes(op)) {

@@ -208,3 +208,54 @@ test('GET /admin/api/score-timeseries returns one point per run, ascending', asy
   assert.equal(p.username, 'alice');
   assert.ok(new Date(body.points[0].played_at) <= new Date(body.points[1].played_at));
 });
+
+test('GET /admin/api/engagement returns the right shape', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const cookie = await registerAndCookie(app, 'alice');
+  await playOneShortRun(app, sessionStore, cookie);
+
+  const r = await app.inject({
+    method: 'GET',
+    url: '/admin/api/engagement',
+    headers: { authorization: BASIC_HEADER }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(typeof body.total_runs, 'number');
+  assert.equal(typeof body.dau, 'number');
+  assert.equal(typeof body.wau, 'number');
+  assert.equal(typeof body.new_players_7d, 'number');
+  // median may be null when there's <1 row in the 30d window; accept null too
+  assert.ok(body.median_score_30d === null || typeof body.median_score_30d === 'number');
+  assert.ok(Array.isArray(body.runs_per_day_30d));
+  assert.equal(body.runs_per_day_30d.length, 30);
+  for (const d of body.runs_per_day_30d) {
+    assert.equal(typeof d.date, 'string');
+    assert.equal(typeof d.count, 'number');
+  }
+  assert.ok(body.total_runs >= 1);
+  assert.ok(body.wau >= 1);
+});
+
+test('GET /admin/api/engagement?user_id scopes to one player', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+  const aliceCookie = await registerAndCookie(app, 'alice');
+  const bobCookie = await registerAndCookie(app, 'bob');
+  await playOneShortRun(app, sessionStore, aliceCookie);
+  await playOneShortRun(app, sessionStore, bobCookie);
+  await playOneShortRun(app, sessionStore, bobCookie);
+
+  const r = await app.inject({
+    method: 'GET',
+    url: '/admin/api/engagement?user_id=2', // bob
+    headers: { authorization: BASIC_HEADER }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.total_runs, 2);
+  assert.equal(body.wau, 1);
+});

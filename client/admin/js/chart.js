@@ -68,10 +68,10 @@ export function renderChart(container, points, options = {}) {
   // Cohort series (drawn first, drawn slightly thicker)
   if (showCohort && cohort.length > 1) {
     const pts = cohort.map(c => ({
-      x: x(+new Date(c.day + 'T00:00:00+08:00')),
+      x: x(+new Date(c.day + 'T12:00:00+08:00')),
       y: y(c.median),
       score: c.median,
-      date: c.day
+      date: sgtDate(c.day + 'T12:00:00+08:00')
     }));
     const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
     svg += `<path d="${d}" stroke="${COHORT_COLOR}" stroke-width="2.5" fill="none" />`;
@@ -129,7 +129,7 @@ export function renderChart(container, points, options = {}) {
     if (lines.length === 0) { tip.style.display = 'none'; return; }
     // Build tooltip
     const lineH = 14, padY = 6, padX = 8;
-    const boxW = 160, boxH = padY * 2 + lines.length * lineH + (lines[0].date ? lineH : 0);
+    const boxW = 160, boxH = padY * 2 + (lines.length + 1) * lineH;
     let tx = px + 10;
     if (tx + boxW > W - PAD_R) tx = px - boxW - 10;
     const ty = PAD_T + 6;

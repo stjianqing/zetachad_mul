@@ -84,7 +84,8 @@ export function renderChart(container, points, options = {}) {
   // Per-player series (only if visible)
   let cIdx = 0;
   for (const [name, pts] of byPlayer) {
-    const color = COLORS[cIdx++ % COLORS.length];
+    const color = options.colors?.get(name) ?? COLORS[cIdx % COLORS.length];
+    cIdx++;
     if (!visiblePlayers.has(name)) continue;
     const xy = pts.map(p => ({
       x: x(+new Date(p.played_at)),

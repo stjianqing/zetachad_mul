@@ -30,14 +30,19 @@ const state = {
 };
 
 const PLAYER_COLORS = ['#58a6ff', '#56d364', '#f1e05a', '#ff7b72', '#bc8cff', '#79c0ff'];
+const playerColors = new Map(); // username -> hex color, populated in loadPlayers
 
 async function loadPlayers() {
   const { players } = await adminApi.players();
   els.playerPicker.innerHTML = '<option value="">All players</option>' +
     players.map(p => `<option value="${p.user_id}">${escape(p.username)} (${p.run_count})</option>`).join('');
+  playerColors.clear();
+  players.forEach((p, i) => {
+    playerColors.set(p.username, PLAYER_COLORS[i % PLAYER_COLORS.length]);
+  });
   // Build chip list (one per player)
   els.playerChips.innerHTML = players.map((p, i) => {
-    const color = PLAYER_COLORS[i % PLAYER_COLORS.length];
+    const color = playerColors.get(p.username);
     return `<span class="player-chip" data-username="${escape(p.username)}" data-color="${color}" style="--chip-color:${color}">${escape(p.username)}</span>`;
   }).join('');
   els.playerChips.querySelectorAll('.player-chip').forEach(chip => {
@@ -56,7 +61,7 @@ function togglePlayer(chip) {
     chip.classList.add('active');
     chip.style.background = chip.dataset.color;
   }
-  renderChart(els.scoreChart, state.scorePoints, { visiblePlayers: state.visiblePlayers, sgtDate });
+  renderChart(els.scoreChart, state.scorePoints, { visiblePlayers: state.visiblePlayers, sgtDate, colors: playerColors });
 }
 
 async function refresh() {
@@ -75,7 +80,7 @@ async function refresh() {
 
   renderEngagement(engagement);
   state.scorePoints = chart.points;
-  renderChart(els.scoreChart, chart.points, { visiblePlayers: state.visiblePlayers, sgtDate });
+  renderChart(els.scoreChart, chart.points, { visiblePlayers: state.visiblePlayers, sgtDate, colors: playerColors });
   renderWeaknessPanel('mul', mulFacts, mulCells, perOp.per_op);
   renderWeaknessPanel('div', divFacts, divCells, perOp.per_op);
   renderAddSubCards(perOp.per_op);

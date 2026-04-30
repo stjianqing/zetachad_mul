@@ -13,14 +13,52 @@ th, td { padding: 6px 10px; text-align: left; border-bottom: 1px solid #21262d; 
 th { color: #8b949e; font-weight: 500; }
 tr.expandable { cursor: pointer; }
 tr.expandable:hover { background: #161b22; }
-#per-op-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.op-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 12px; }
-.op-card h4 { margin: 0 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; }
-.op-card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
-.op-card dt { color: #8b949e; }
-.weak-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 canvas { background: #161b22; border: 1px solid #30363d; border-radius: 4px; display: block; }
 .tip { font-size: 12px; color: #8b949e; min-height: 18px; padding: 4px 0; }
 #session-detail { margin-top: 16px; padding: 12px; background: #161b22; border-radius: 6px; }
 #session-detail:empty { display: none; }
 #score-chart { background: #161b22; border: 1px solid #30363d; border-radius: 4px; padding: 12px; height: 220px; }
+/* Engagement strip */
+.engagement-strip { display: flex; gap: 12px; align-items: stretch; flex-wrap: wrap; }
+.stat-tile { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; flex: 1 1 140px; min-width: 140px; }
+.stat-tile .label { font-size: 11px; text-transform: uppercase; color: #8b949e; letter-spacing: 0.05em; }
+.stat-tile .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+.engagement-spark { width: 140px; align-self: center; }
+
+/* Player chips below score chart */
+.player-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.player-chip { padding: 3px 10px; border-radius: 12px; background: #21262d; cursor: pointer; font-size: 12px; user-select: none; border: 1px solid transparent; }
+.player-chip:hover { border-color: #30363d; }
+.player-chip.active { color: #0e1117; font-weight: 600; }
+
+/* Weakness grid */
+.weakness-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.weakness-panel h3 { margin: 0 0 6px; font-size: 13px; color: #e6edf3; text-transform: uppercase; letter-spacing: 0.05em; }
+.weakness-summary { color: #8b949e; font-size: 12px; margin-bottom: 8px; }
+.weakness-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: start; }
+.heatmap-wrap canvas { background: #161b22; border: 1px solid #30363d; border-radius: 4px; display: block; }
+
+/* Trouble-facts list */
+.trouble-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.trouble-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 3px; cursor: pointer; font-size: 13px; }
+.trouble-row:hover, .trouble-row.linked { background: #21262d; }
+.trouble-row.flash { animation: trouble-flash 1.5s ease-out; }
+@keyframes trouble-flash { from { background: #1f3a3a; } to { background: transparent; } }
+.trouble-fact { font-family: ui-monospace, monospace; }
+.trouble-stat { color: #8b949e; font-size: 12px; font-variant-numeric: tabular-nums; }
+.n-badge { display: inline-block; min-width: 36px; padding: 1px 6px; font-size: 10px; border-radius: 3px; border: 1px solid #30363d; text-align: center; color: #8b949e; }
+.n-badge.solid { background: #21262d; color: #e6edf3; }
+.trouble-empty { color: #8b949e; font-size: 12px; padding: 8px 0; }
+
+/* Add/Sub cards (demoted) */
+.addsub-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+.addsub-cards .op-card { background: #161b22; border: 1px solid #30363d; border-radius: 6px; padding: 10px 14px; }
+.addsub-cards .op-card h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+.addsub-cards .op-card dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13px; }
+.addsub-cards .op-card dt { color: #8b949e; }
+
+/* Responsive: stack the weakness grid below ~900px */
+@media (max-width: 960px) {
+  .weakness-grid, .addsub-cards { grid-template-columns: 1fr; }
+  .weakness-row { grid-template-columns: 1fr; }
+}

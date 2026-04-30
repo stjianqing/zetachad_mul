@@ -22,45 +22,43 @@
   </header>
 
   <main>
-    <section id="activity-section" class="hidden">
-      <h2>Activity (all players)</h2>
-      <table id="activity-table"></table>
+    <section id="engagement-section">
+      <div id="engagement-strip" class="engagement-strip"></div>
     </section>
 
     <section>
       <h2>Score over time</h2>
       <div id="score-chart"></div>
+      <div id="player-chips" class="player-chips"></div>
     </section>
 
     <section>
-      <h2>Per-op summary</h2>
-      <div id="per-op-cards"></div>
-    </section>
-
-    <section>
-      <h2>Weak spots</h2>
-      <div class="weak-cols">
-        <div>
-          <h3>Slowest</h3>
-          <table id="slowest-table"></table>
+      <h2>Where players struggle</h2>
+      <div class="weakness-grid">
+        <div class="weakness-panel" id="weakness-mul">
+          <h3>Multiplication</h3>
+          <div class="weakness-summary" id="weakness-mul-summary"></div>
+          <div class="weakness-row">
+            <div class="trouble-list" id="trouble-mul"></div>
+            <div class="heatmap-wrap">
+              <canvas id="heatmap-mul"></canvas>
+              <div id="heatmap-mul-tip" class="tip"></div>
+            </div>
+          </div>
         </div>
-        <div>
-          <h3>Lowest accuracy</h3>
-          <table id="least-accurate-table"></table>
+        <div class="weakness-panel" id="weakness-div">
+          <h3>Division</h3>
+          <div class="weakness-summary" id="weakness-div-summary"></div>
+          <div class="weakness-row">
+            <div class="trouble-list" id="trouble-div"></div>
+            <div class="heatmap-wrap">
+              <canvas id="heatmap-div"></canvas>
+              <div id="heatmap-div-tip" class="tip"></div>
+            </div>
+          </div>
         </div>
       </div>
-    </section>
-
-    <section>
-      <h2>Multiplication heatmap</h2>
-      <canvas id="heatmap-mul" width="990" height="110"></canvas>
-      <div id="heatmap-mul-tip" class="tip"></div>
-    </section>
-
-    <section>
-      <h2>Division heatmap</h2>
-      <canvas id="heatmap-div" width="990" height="110"></canvas>
-      <div id="heatmap-div-tip" class="tip"></div>
+      <div id="addsub-cards" class="addsub-cards"></div>
     </section>
 
     <section>

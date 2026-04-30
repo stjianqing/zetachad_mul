@@ -266,3 +266,74 @@ test('GET /admin/api/engagement?user_id scopes to one player', async (t) => {
   assert.equal(body.total_runs, 2);
   assert.equal(body.wau, 1);
 });
+
+test('GET /admin/api/trouble-facts?op=mul returns shape, n>=3, restricted to 2..12', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  // Seed: one user, one run, attempts spread across mul facts incl. >12 rhs
+  await pool.query(`INSERT INTO users (username, password_hash) VALUES ('seed', 'x')`);
+  await pool.query(`INSERT INTO runs (user_id, score, duration_ms, played_at) VALUES (1, 50, 120000, now())`);
+  // 4 attempts on (12, 7), 3 on (11, 8), 2 on (5, 5), 5 on (4, 50)
+  const insert = `INSERT INTO attempts (run_id, q_index, op, lhs, rhs, answer, user_answer, response_ms, correct, asked_at)
+                  VALUES (1, $1, 'mul', $2, $3, $4, $5, $6, $7, now())`;
+  let q = 0;
+  for (let i = 0; i < 4; i++) await pool.query(insert, [q++, 12, 7, 84, '84', 3000, true]);
+  for (let i = 0; i < 3; i++) await pool.query(insert, [q++, 11, 8, 88, '88', 2500, true]);
+  for (let i = 0; i < 2; i++) await pool.query(insert, [q++, 5, 5, 25, '25', 800, true]);
+  for (let i = 0; i < 5; i++) await pool.query(insert, [q++, 4, 50, 200, '200', 4000, true]); // rhs=50, OUT of range
+
+  const r = await app.inject({
+    method: 'GET',
+    url: '/admin/api/trouble-facts?op=mul',
+    headers: { authorization: BASIC_HEADER }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.op, 'mul');
+  assert.equal(typeof body.op_median_ms, 'number');
+  assert.equal(typeof body.total_attempts, 'number');
+  assert.ok(Array.isArray(body.facts));
+  // Should include (12,7) [n=4] and (11,8) [n=3] but NOT (5,5) [n=2 < 3] or (4,50) [rhs > 12]
+  const keys = body.facts.map(f => `${f.lhs}x${f.rhs}`);
+  assert.ok(keys.includes('12x7'));
+  assert.ok(keys.includes('11x8'));
+  assert.ok(!keys.includes('5x5'));
+  assert.ok(!keys.includes('4x50'));
+  for (const f of body.facts) {
+    assert.ok(f.lhs >= 2 && f.lhs <= 12);
+    assert.ok(f.rhs >= 2 && f.rhs <= 12);
+    assert.ok(f.attempts >= 3);
+    assert.equal(typeof f.score, 'number');
+  }
+});
+
+test('GET /admin/api/trouble-facts?op=div uses (divisor, quotient) axes', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  await pool.query(`INSERT INTO users (username, password_hash) VALUES ('seed', 'x')`);
+  await pool.query(`INSERT INTO runs (user_id, score, duration_ms, played_at) VALUES (1, 50, 120000, now())`);
+  const insert = `INSERT INTO attempts (run_id, q_index, op, lhs, rhs, answer, user_answer, response_ms, correct, asked_at)
+                  VALUES (1, $1, 'div', $2, $3, $4, $5, $6, $7, now())`;
+  let q = 0;
+  // 84 / 7 = 12 -> divisor=7, quotient=12 -> in range
+  for (let i = 0; i < 4; i++) await pool.query(insert, [q++, 84, 7, 12, '12', 3000, true]);
+  // 600 / 6 = 100 -> quotient=100 -> OUT of range
+  for (let i = 0; i < 4; i++) await pool.query(insert, [q++, 600, 6, 100, '100', 5000, true]);
+  // 9 / 4: not divisible (lhs % rhs != 0) - should never happen but guard anyway
+  // skip - the generator never produces these.
+
+  const r = await app.inject({
+    method: 'GET',
+    url: '/admin/api/trouble-facts?op=div',
+    headers: { authorization: BASIC_HEADER }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  const keys = body.facts.map(f => `${f.lhs}/${f.rhs}`);
+  assert.ok(keys.includes('84/7'));
+  assert.ok(!keys.includes('600/6'));
+});

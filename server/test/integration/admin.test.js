@@ -237,6 +237,13 @@ test('GET /admin/api/engagement returns the right shape', async (t) => {
   }
   assert.ok(body.total_runs >= 1);
   assert.ok(body.wau >= 1);
+  const todayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Singapore',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+  const todayBucket = body.runs_per_day_30d.find(d => d.date === todayKey);
+  assert.ok(todayBucket, `expected today's bucket (${todayKey}) in 30-day window`);
+  assert.ok(todayBucket.count >= 1, 'today\'s run should be counted in today\'s bucket');
 });
 
 test('GET /admin/api/engagement?user_id scopes to one player', async (t) => {

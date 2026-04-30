@@ -235,7 +235,7 @@ export default async function adminRoutes(fastify, { pool }) {
     // 30-day per-day run counts in SGT, padded to exactly 30 entries.
     const { rows: dayRows } = await pool.query(
       `SELECT
-         (r.played_at AT TIME ZONE 'Asia/Singapore')::date AS d,
+         to_char((r.played_at AT TIME ZONE 'Asia/Singapore')::date, 'YYYY-MM-DD') AS d,
          COUNT(*)::int AS c
        FROM runs r
        ${where ? where + ' AND' : 'WHERE'} r.played_at >= now() - interval '30 days'
@@ -244,13 +244,15 @@ export default async function adminRoutes(fastify, { pool }) {
       params
     );
 
-    const dayMap = new Map(dayRows.map(r => [r.d.toISOString().slice(0, 10), r.c]));
-    const today = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Singapore' }));
+    const dayMap = new Map(dayRows.map(r => [r.d, r.c])); // r.d is now a 'YYYY-MM-DD' string
+    const sgtDateFmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Singapore',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    const nowMs = Date.now();
     const runs_per_day_30d = [];
     for (let i = 29; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const key = d.toISOString().slice(0, 10);
+      const key = sgtDateFmt.format(new Date(nowMs - i * 86400000));
       runs_per_day_30d.push({ date: key, count: dayMap.get(key) ?? 0 });
     }
 

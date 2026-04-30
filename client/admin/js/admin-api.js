@@ -16,7 +16,8 @@ export const adminApi = {
   attempts:       (runId)                  => get(`/runs/${runId}/attempts`),
   perOp:          (q = {})                 => get('/per-op' + qs(q)),
   heatmap:        (op, q = {})             => get('/heatmap' + qs({ op, ...q })),
-  weakSpots:      (q = {})                 => get('/weak-spots' + qs(q)),
+  troubleFacts:   (op, q = {})             => get('/trouble-facts' + qs({ op, ...q })),
+  engagement:     (q = {})                 => get('/engagement' + qs(q)),
   scoreTimeSeries:(q = {})                 => get('/score-timeseries' + qs(q))
 };
 

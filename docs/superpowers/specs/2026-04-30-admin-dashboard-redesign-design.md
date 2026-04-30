@@ -167,8 +167,8 @@ Returns:
 
 SQL: same `attempts a JOIN runs r` join used by the existing weak-spots endpoint, with:
 - `HAVING COUNT(*) >= 3` (down from 10)
-- For mul/div: `WHERE a.lhs BETWEEN 2 AND 12 AND a.rhs BETWEEN 2 AND 12`
-- For division specifically the constraint applies as: divisor (`rhs`) in 2..12, quotient (the answer) in 2..12 — equivalent to `lhs BETWEEN rhs*2 AND rhs*12` since the existing schema stores `lhs ÷ rhs`. Verify by reading `server/src/game/generator.js` before implementing.
+- For mul: `WHERE a.lhs BETWEEN 2 AND 12 AND a.rhs BETWEEN 2 AND 12` (clips out the rhs > 12 portion of the wider 2..100 range that the default config records)
+- For div: `WHERE a.rhs BETWEEN 2 AND 12 AND (a.lhs / a.rhs) BETWEEN 2 AND 12 AND a.lhs % a.rhs = 0`. The fact key returned is `{ divisor: rhs, quotient: lhs/rhs }`, not `{ lhs, rhs }`, so the trouble-facts list and the linked heatmap can address cells the same way.
 - `op_median_ms` computed in the same query: `percentile_cont(0.5) WITHIN GROUP (ORDER BY response_ms)` over all attempts of this op (filtered by user_id when set), used to normalize the score
 - Score computed in JS after fetch (small list, simpler than SQL)
 - Sort by score descending, take `limit` rows
@@ -284,10 +284,15 @@ Two test surfaces:
    - Resize browser → layout reflows cleanly down to ~900px
    - Empty-state: `/admin/` on a fresh DB should show empty-state messages everywhere, not blank tables
 
-## Open assumptions to verify during implementation
+## Verified assumptions
 
-1. **Generator range** — confirm `server/src/game/generator.js` produces mul facts only with both operands in 2..12 (or close to it). If it can produce e.g. `7 × 50`, the heatmap restriction is lossy and the design needs a small "outside-range" indicator.
-2. **Division storage convention** — confirm whether `attempts.lhs/rhs` for `op=div` stores `dividend/divisor` (so `lhs ÷ rhs = answer`) or some other ordering. The trouble-facts SQL filter depends on this.
-3. **Player count** — the player chips in the chart assume reasonable counts (≤20). If the platform has many more, the chips need a "show top N most-active" cap. Spot-check before implementing; not blocking.
+1. **Generator range:** confirmed via `server/src/game/generator.js` and `server/src/config.js`. With `DEFAULT_CONFIG`:
+   - `mul`: `lhs ∈ 2..12`, `rhs ∈ 2..100` — recorded data is wider than the heatmap shows.
+   - `div`: `divisor (rhs) ∈ 2..12`, `quotient (lhs/rhs) ∈ 2..100`.
+   - Restricting the UI heatmap to 2..12 × 2..12 deliberately discards the long-tail multiplier/quotient cells. Rationale: those cells receive few attempts each (sparse signal) and are the root cause of the current "empty weak-spots" complaint.
+2. **Division storage convention:** confirmed — `attempts.lhs = dividend`, `attempts.rhs = divisor`, `lhs / rhs = quotient = answer`. Always exact (no remainder) because the generator multiplies first.
+3. **Player count:** the platform is small (single hosted instance, friends/family). Player chips assume <20 active players — acceptable for the MVP. If the count grows, capping to top-N most-active becomes a future refinement, not a launch requirement.
 
-These checks happen in the first plan step (read the generator + a few sample rows), not deferred.
+## Out of scope (worth a separate decision)
+
+The empty-heatmap root cause is partly a config decision: `DEFAULT_CONFIG.div.rhsMax = 100` and `DEFAULT_CONFIG.mul.rhsMax = 100` mean the generator produces facts well outside the 12×12 table (e.g., `7 × 87`, `408 ÷ 6`). Tightening these to 12 would densify the analytics signal but changes player-facing difficulty. **This redesign does not change the config** — it just clips the analytics view. Whether to also narrow the generator range is a separate product decision.

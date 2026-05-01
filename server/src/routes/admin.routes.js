@@ -194,6 +194,79 @@ export default async function adminRoutes(fastify, { pool }) {
     };
   });
 
+  fastify.get('/admin/api/engagement', async (req) => {
+    const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
+    const params = [];
+    let where = '';
+    if (userId != null && Number.isFinite(userId)) {
+      params.push(userId);
+      where = 'WHERE r.user_id = $1';
+    }
+
+    // Single roll-up query: total_runs, dau (SGT today), wau (last 7d), median (last 30d)
+    const { rows: aggRows } = await pool.query(
+      `SELECT
+         COUNT(*)::int AS total_runs,
+         COUNT(DISTINCT r.user_id) FILTER (
+           WHERE (r.played_at AT TIME ZONE 'Asia/Singapore')::date
+               = (now() AT TIME ZONE 'Asia/Singapore')::date
+         )::int AS dau,
+         COUNT(DISTINCT r.user_id) FILTER (
+           WHERE r.played_at >= now() - interval '7 days'
+         )::int AS wau,
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY r.score)
+           FILTER (WHERE r.played_at >= now() - interval '30 days') AS median_score_30d
+       FROM runs r
+       ${where}`,
+      params
+    );
+
+    // New players in last 7d: users whose first run is within the window
+    const { rows: newRows } = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM (
+         SELECT user_id, MIN(played_at) AS first_run
+         FROM runs r
+         ${where}
+         GROUP BY user_id
+       ) t WHERE t.first_run >= now() - interval '7 days'`,
+      params
+    );
+
+    // 30-day per-day run counts in SGT, padded to exactly 30 entries.
+    const { rows: dayRows } = await pool.query(
+      `SELECT
+         to_char((r.played_at AT TIME ZONE 'Asia/Singapore')::date, 'YYYY-MM-DD') AS d,
+         COUNT(*)::int AS c
+       FROM runs r
+       ${where ? where + ' AND' : 'WHERE'} r.played_at >= now() - interval '30 days'
+       GROUP BY d
+       ORDER BY d ASC`,
+      params
+    );
+
+    const dayMap = new Map(dayRows.map(r => [r.d, r.c])); // r.d is now a 'YYYY-MM-DD' string
+    const sgtDateFmt = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Singapore',
+      year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+    const nowMs = Date.now();
+    const runs_per_day_30d = [];
+    for (let i = 29; i >= 0; i--) {
+      const key = sgtDateFmt.format(new Date(nowMs - i * 86400000));
+      runs_per_day_30d.push({ date: key, count: dayMap.get(key) ?? 0 });
+    }
+
+    const a = aggRows[0];
+    return {
+      total_runs: a.total_runs,
+      dau: a.dau,
+      wau: a.wau,
+      new_players_7d: newRows[0].n,
+      median_score_30d: a.median_score_30d == null ? null : Math.round(Number(a.median_score_30d)),
+      runs_per_day_30d
+    };
+  });
+
   fastify.get('/admin/api/heatmap', async (req, reply) => {
     const op = req.query.op;
     if (!['add', 'sub', 'mul', 'div'].includes(op)) {
@@ -234,17 +307,40 @@ export default async function adminRoutes(fastify, { pool }) {
     };
   });
 
-  fastify.get('/admin/api/weak-spots', async (req) => {
+  fastify.get('/admin/api/trouble-facts', async (req, reply) => {
+    const op = req.query.op;
+    if (!['add', 'sub', 'mul', 'div'].includes(op)) {
+      return reply.code(400).send({ error: 'bad_op' });
+    }
     const userId = req.query.user_id != null ? Number(req.query.user_id) : null;
-    const params = [];
-    let where = '';
+    const limitRaw = Number(req.query.limit ?? 8);
+    const limit = Math.min(20, Math.max(1, Number.isFinite(limitRaw) ? limitRaw : 8));
+
+    const params = [op];
+    const wheres = [`a.op = $1`];
     if (userId != null && Number.isFinite(userId)) {
       params.push(userId);
-      where = 'WHERE r.user_id = $1';
+      wheres.push(`r.user_id = $${params.length}`);
     }
-    const { rows } = await pool.query(
+
+    // Range filter: mul/div restricted to 2..12 x 2..12 (in their natural axes).
+    // For mul: lhs (multiplicand) in 2..12 AND rhs (multiplier) in 2..12.
+    // For div: rhs (divisor) in 2..12 AND lhs/rhs (quotient) in 2..12 AND lhs % rhs = 0.
+    // For add/sub: no range filter (they don't appear in the redesigned weakness grid,
+    // but the endpoint supports them for completeness/future use).
+    if (op === 'mul') {
+      wheres.push(`a.lhs BETWEEN 2 AND 12`);
+      wheres.push(`a.rhs BETWEEN 2 AND 12`);
+    } else if (op === 'div') {
+      wheres.push(`a.rhs BETWEEN 2 AND 12`);
+      wheres.push(`a.lhs % a.rhs = 0`);
+      wheres.push(`(a.lhs / a.rhs) BETWEEN 2 AND 12`);
+    }
+    const whereSql = 'WHERE ' + wheres.join(' AND ');
+
+    // Aggregate buckets that have n >= 3, plus the op-wide median and total attempts.
+    const { rows: bucketRows } = await pool.query(
       `SELECT
-         a.op                                                          AS op,
          a.lhs                                                          AS lhs,
          a.rhs                                                          AS rhs,
          COUNT(*)::int                                                  AS attempts,
@@ -252,34 +348,45 @@ export default async function adminRoutes(fastify, { pool }) {
          (100.0 * SUM(CASE WHEN a.correct THEN 1 ELSE 0 END) / COUNT(*))::float AS accuracy_pct
        FROM attempts a
        JOIN runs r ON r.id = a.run_id
-       ${where}
-       GROUP BY a.op, a.lhs, a.rhs
-       HAVING COUNT(*) >= 10`,
+       ${whereSql}
+       GROUP BY a.lhs, a.rhs
+       HAVING COUNT(*) >= 3`,
       params
     );
 
-    const slowest = [...rows]
-      .sort((a, b) => b.mean_response_ms - a.mean_response_ms)
-      .slice(0, 10)
-      .map(r => ({
-        op: r.op,
-        lhs: r.lhs,
-        rhs: r.rhs,
-        attempts: r.attempts,
-        mean_response_ms: Math.round(r.mean_response_ms)
-      }));
-    const least_accurate = [...rows]
-      .sort((a, b) => a.accuracy_pct - b.accuracy_pct)
-      .slice(0, 10)
-      .map(r => ({
-        op: r.op,
-        lhs: r.lhs,
-        rhs: r.rhs,
-        attempts: r.attempts,
-        accuracy_pct: Math.round(r.accuracy_pct * 10) / 10
-      }));
+    const { rows: medianRows } = await pool.query(
+      `SELECT
+         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY a.response_ms)::float AS median,
+         COUNT(*)::int                                                     AS total_attempts
+       FROM attempts a
+       JOIN runs r ON r.id = a.run_id
+       ${whereSql}`,
+      params
+    );
 
-    return { slowest, least_accurate };
+    const opMedianMs = Math.max(1, Math.round(medianRows[0].median ?? 1));
+
+    // Score = slowness ratio + 2 * inaccuracy ratio. Higher = worse.
+    const scored = bucketRows.map(b => {
+      const slowness = b.mean_response_ms / opMedianMs;
+      const inaccuracy = 1 - (b.accuracy_pct / 100);
+      const score = slowness + 2 * inaccuracy;
+      return {
+        lhs: b.lhs,
+        rhs: b.rhs,
+        attempts: b.attempts,
+        mean_response_ms: Math.round(b.mean_response_ms),
+        accuracy_pct: Math.round(b.accuracy_pct * 10) / 10,
+        score: Math.round(score * 1000) / 1000
+      };
+    }).sort((a, b) => b.score - a.score).slice(0, limit);
+
+    return {
+      op,
+      op_median_ms: opMedianMs,
+      total_attempts: medianRows[0].total_attempts,
+      facts: scored
+    };
   });
 
   fastify.get('/admin/api/score-timeseries', async (req, reply) => {

@@ -168,7 +168,7 @@ Returns:
 SQL: same `attempts a JOIN runs r` join used by the existing weak-spots endpoint, with:
 - `HAVING COUNT(*) >= 3` (down from 10)
 - For mul: `WHERE a.lhs BETWEEN 2 AND 12 AND a.rhs BETWEEN 2 AND 12` (clips out the rhs > 12 portion of the wider 2..100 range that the default config records)
-- For div: `WHERE a.rhs BETWEEN 2 AND 12 AND (a.lhs / a.rhs) BETWEEN 2 AND 12 AND a.lhs % a.rhs = 0`. The fact key returned is `{ divisor: rhs, quotient: lhs/rhs }`, not `{ lhs, rhs }`, so the trouble-facts list and the linked heatmap can address cells the same way.
+- For div: `WHERE a.rhs BETWEEN 2 AND 12 AND (a.lhs / a.rhs) BETWEEN 2 AND 12 AND a.lhs % a.rhs = 0`. For div, the API still returns raw `{ lhs, rhs }` fields (matching the heatmap endpoint's shape and storage convention). The client (`admin.js` `transformCells`) maps these to `(quotient, divisor)` axes for the heatmap and renders the natural form `dividend ÷ divisor` in the trouble-facts list and tooltip.
 - `op_median_ms` computed in the same query: `percentile_cont(0.5) WITHIN GROUP (ORDER BY response_ms)` over all attempts of this op (filtered by user_id when set), used to normalize the score
 - Score computed in JS after fetch (small list, simpler than SQL)
 - Sort by score descending, take `limit` rows

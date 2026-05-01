@@ -87,22 +87,70 @@ systemctl daemon-reload
 systemctl enable zetachad
 ```
 
-## 8. First deploy from your laptop
+## 8. Deploying from your laptop
 
-Back on your dev machine:
+You have two deploy scripts:
+
+- **`deploy/deploy.sh`** — uses `rsync` (faster, supports `--delete`). Use this on Linux/macOS or any environment where `rsync` is available.
+- **`deploy/deploy-scp.sh`** — uses `scp` only (slower, no `--delete`). Use this on Windows Git Bash, which does **not** ship with `rsync`.
+
+### From Windows (Git Bash) — use this
+
+Git Bash on Windows has `ssh` and `scp` but not `rsync`. Always use `deploy-scp.sh`:
 
 ```bash
-cd /c/Users/stjia/zetachad_mul
+cd ~/projects/zetachad_mul
+VPS_HOST=root@87.99.158.208 ./deploy/deploy-scp.sh
+```
+
+**SSH key auth required.** First time only, copy your public key to the VPS so deploys don't prompt for the password ~6 times:
+
+```powershell
+# In PowerShell on the laptop (one-time):
+ssh-keygen -t ed25519 -C "your-email"   # accept defaults if no key yet
+type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh root@87.99.158.208 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+ssh root@87.99.158.208 "echo 'key auth works'"
+```
+
+**Paste tip.** Git Bash ignores `Ctrl+V` by default. Right-click → Paste, or enable `Ctrl+Shift+V` via title bar → Options → Keys → "Ctrl+Shift+letter shortcuts".
+
+**Don't paste multi-line commands into Git Bash.** The terminal silently inserts newlines, which breaks `\` line continuations and causes bash to try to *execute* JSON files. Always run a script from disk (`./deploy/deploy-scp.sh`), not a long inline command.
+
+### From Linux/macOS
+
+```bash
+cd /path/to/zetachad_mul
 VPS_HOST=root@87.99.158.208 ./deploy/deploy.sh
 ```
 
-After the first deploy succeeds, ssh in and start the service:
+### What both scripts do
+
+1. rsync/scp `server/` → `/srv/zetachad/server/` on VPS
+2. rsync/scp `client/` → `/var/www/zetachad/client/`
+3. rsync/scp `client/admin/` → `/var/www/zetachad/admin/`
+4. SSH in: `npm ci --omit=dev`, run migrations (`node src/db.js`), `systemctl restart zetachad`, print status
+
+### After a routine deploy
+
+Hit `https://SUBDOMAIN.duckdns.org/admin/` (or `/api/health`) from a browser to confirm the new code is serving. If anything looks broken, check logs with:
+
+```bash
+ssh root@87.99.158.208 'journalctl -u zetachad -n 50 --no-pager'
+```
+
+### First-deploy only
+
+After the very first deploy succeeds, ssh in and start the service (only needed once — subsequent deploys restart it automatically):
 
 ```bash
 ssh root@87.99.158.208 'systemctl start zetachad && systemctl status zetachad --no-pager'
 ```
 
 Hit `http://SUBDOMAIN.duckdns.org/api/health` from a browser. Expected: `{"ok":true}`.
+
+### Source of truth
+
+The repo lives on GitHub at `https://github.com/stjianqing/zetachad_mul`. The VPS does **not** have a `.git` directory — it only receives synced files. To update the VPS, you must run the deploy script from a machine that has the latest code (typically your laptop after `git pull`).
 
 ## 9. TLS via Let's Encrypt
 

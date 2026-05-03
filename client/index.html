@@ -19,7 +19,13 @@
     </nav>
   </header>
   <main id="app" class="narrow">
-    <h1>Multiplayer drill</h1>
+    <section class="daily-hero" id="daily-hero" data-state="loading">
+      <div class="daily-hero-text">
+        <div class="daily-hero-title" id="daily-hero-title">DAILY CHALLENGE</div>
+        <div class="daily-hero-sub" id="daily-hero-sub">Loading…</div>
+      </div>
+      <button class="daily-hero-btn" id="daily-hero-btn" disabled>—</button>
+    </section>
 
     <div class="champ-banner" id="champion-banner"></div>
 
@@ -28,21 +34,27 @@
       <div class="speed-grid" id="speed-grid"></div>
     </section>
 
-    <span class="eligibility-badge" id="eligibility">leaderboard-eligible</span>
-
-    <div class="default-summary">
-      <strong>Default run:</strong> all four ops · 120 s ·
-      add 2–100 · sub 2–100 · mul 2–12×2–100 · div 2–12×2–100.
-      Only default runs qualify for the leaderboard.
-    </div>
-
     <div class="landing-buttons">
       <button class="primary" id="start-user">Start as User</button>
       <button class="secondary" id="start-guest">Start as Guest</button>
     </div>
 
+    <section class="daily-board" id="daily-board">
+      <h2>Today's Daily Leaderboard</h2>
+      <ol class="daily-board-list" id="daily-board-list">
+        <li class="dim">Loading…</li>
+      </ol>
+      <a class="daily-board-link" href="leaderboard.html#daily">→ See all rankings</a>
+    </section>
+
     <details class="advanced-disclosure" id="advanced">
       <summary>Show advanced (custom settings)</summary>
+      <span class="eligibility-badge" id="eligibility">leaderboard-eligible</span>
+      <div class="default-summary">
+        <strong>Default run:</strong> all four ops · 120 s ·
+        add 2–100 · sub 2–100 · mul 2–12×2–100 · div 2–12×2–100.
+        Only default runs qualify for the leaderboard.
+      </div>
       <div class="settings-grid" id="settings-grid">
         <fieldset class="op-card" data-op="add" style="--i: 0">
           <legend><label><input type="checkbox" name="add_enabled" checked /> <span class="op-sym">+</span> Addition</label></legend>

@@ -1,3 +1,5 @@
+import { CLUSTER_BOUNDS } from '../practice/clusters.js';
+
 // Mulberry32 PRNG — deterministic, fast, good enough for question generation.
 export function makeRng(seed) {
   let s = seed >>> 0;
@@ -14,7 +16,21 @@ function intInRange(rng, lo, hi) {
   return Math.floor(rng() * (hi - lo + 1)) + lo;
 }
 
-export function generate(config, rng) {
+function pickFromArray(rng, arr) {
+  return arr[intInRange(rng, 0, arr.length - 1)];
+}
+
+export function generate(config, rng, weighting) {
+  if (weighting && weighting.clusters && weighting.clusters.length > 0) {
+    if (rng() < weighting.weakBias) {
+      const clusterId = pickFromArray(rng, weighting.clusters);
+      return generateFromCluster(rng, clusterId);
+    }
+  }
+  return generateFromConfig(config, rng);
+}
+
+function generateFromConfig(config, rng) {
   const enabled = Object.entries(config.ops)
     .filter(([, v]) => v && v.enabled)
     .map(([k]) => k);
@@ -22,42 +38,70 @@ export function generate(config, rng) {
 
   const op = enabled[intInRange(rng, 0, enabled.length - 1)];
 
-  let result;
   switch (op) {
     case 'add': {
       const { min, max } = config.ops.add;
       const a = intInRange(rng, min, max);
       const b = intInRange(rng, min, max);
-      result = { op, a, b, answer: a + b, prompt: `${a} + ${b}` };
-      break;
+      return { op, a, b, answer: a + b, prompt: `${a} + ${b}` };
     }
     case 'sub': {
       const { min, max } = config.ops.sub;
       let a = intInRange(rng, min, max);
       let b = intInRange(rng, min, max);
       if (a < b) [a, b] = [b, a];
-      result = { op, a, b, answer: a - b, prompt: `${a} − ${b}` };
-      break;
+      return { op, a, b, answer: a - b, prompt: `${a} − ${b}` };
     }
     case 'mul': {
       const { lhsMin, lhsMax, rhsMin, rhsMax } = config.ops.mul;
       const a = intInRange(rng, lhsMin, lhsMax);
       const b = intInRange(rng, rhsMin, rhsMax);
-      result = { op, a, b, answer: a * b, prompt: `${a} × ${b}` };
-      break;
+      return { op, a, b, answer: a * b, prompt: `${a} × ${b}` };
     }
     case 'div': {
       const { lhsMin, lhsMax, rhsMin, rhsMax } = config.ops.div;
-      // Generate quotient × divisor = dividend, present as dividend ÷ divisor.
       const quotient = intInRange(rng, rhsMin, rhsMax);
       const divisor = intInRange(rng, lhsMin, lhsMax);
       const dividend = quotient * divisor;
-      result = { op, a: dividend, b: divisor, answer: quotient, prompt: `${dividend} ÷ ${divisor}` };
-      break;
+      return { op, a: dividend, b: divisor, answer: quotient, prompt: `${dividend} ÷ ${divisor}` };
     }
     default:
       throw new Error(`unknown op: ${op}`);
   }
+}
 
-  return result;
+function generateFromCluster(rng, clusterId) {
+  const c = CLUSTER_BOUNDS[clusterId];
+  if (!c) throw new Error(`unknown cluster: ${clusterId}`);
+
+  switch (c.op) {
+    case 'mul': {
+      const a = pickFromArray(rng, c.lhsValues);
+      const b = intInRange(rng, c.rhsMin, c.rhsMax);
+      return { op: 'mul', a, b, answer: a * b, prompt: `${a} × ${b}` };
+    }
+    case 'div': {
+      const divisor = pickFromArray(rng, c.divisorValues);
+      const minQ = Math.ceil(c.dividendMin / divisor);
+      const maxQ = Math.floor(c.dividendMax / divisor);
+      const lo = Math.max(minQ, 2);
+      const hi = Math.min(maxQ, 100);
+      const quotient = intInRange(rng, lo, hi);
+      const dividend = quotient * divisor;
+      return { op: 'div', a: dividend, b: divisor, answer: quotient, prompt: `${dividend} ÷ ${divisor}` };
+    }
+    case 'add': {
+      const big = intInRange(rng, c.maxMin, c.maxMax);
+      const small = intInRange(rng, 2, big);
+      const [a, b] = rng() < 0.5 ? [big, small] : [small, big];
+      return { op: 'add', a, b, answer: a + b, prompt: `${a} + ${b}` };
+    }
+    case 'sub': {
+      const a = intInRange(rng, c.maxMin, c.maxMax);
+      const b = intInRange(rng, 2, a);
+      return { op: 'sub', a, b, answer: a - b, prompt: `${a} − ${b}` };
+    }
+    default:
+      throw new Error(`unsupported cluster op: ${c.op}`);
+  }
 }

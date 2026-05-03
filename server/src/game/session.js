@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { generate, makeRng } from './generator.js';
 import { grade } from './grader.js';
 import { isDefaultConfig } from '../config.js';
+import { dateStringToSeed } from './sgt-date.js';
 
 const DEFAULT_IDLE_TTL_MS = 5 * 60 * 1000;
 
@@ -32,19 +33,27 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
   }
 
   return {
-    start({ userId, config, practice = false, weighting = null }) {
+    start({ userId, config, practice = false, weighting = null, mode = 'normal', seedDate = null }) {
       const sessionId = makeId();
       const startedAt = now();
-      const rng = makeRng(nextSeed());
+      const isDailyGauntlet = mode === 'daily-gauntlet';
+      const rng = isDailyGauntlet
+        ? makeRng(dateStringToSeed(seedDate))
+        : makeRng(nextSeed());
       const session = {
         id: sessionId,
         userId: userId ?? null,
         config,
         practice,
         weighting,
+        mode,
+        seedDate,                              // null for normal sessions
+        totalQuestions: isDailyGauntlet ? 60 : null,
+        currentQuestionIndex: isDailyGauntlet ? 0 : null,
+        startTimeMs: startedAt,                // wall-clock start; used for daily-gauntlet duration
         startedAt,
         lastTouchedAt: startedAt,
-        durationMs: config.durationMs,
+        durationMs: isDailyGauntlet ? null : config.durationMs,
         score: 0,
         currentQuestion: null,
         peekQuestion: null,
@@ -61,7 +70,10 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         sessionId,
         question: publicQuestion(session.currentQuestion),
         peekQuestion: publicQuestion(session.peekQuestion),
-        timeLimitMs: session.durationMs
+        timeLimitMs: session.durationMs,                 // null for daily-gauntlet
+        mode: session.mode,
+        totalQuestions: session.totalQuestions,
+        questionIndex: session.currentQuestionIndex
       };
     },
 
@@ -70,13 +82,19 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       if (!session) return null;
       const t = now();
       session.lastTouchedAt = t;
-      const elapsed = t - session.startedAt;
-      if (elapsed >= session.durationMs) {
-        session.finalized = true;
-        return { timeUp: true, finalScore: session.score };
+
+      // Time-up branch: only for non-daily-gauntlet sessions.
+      if (session.mode !== 'daily-gauntlet') {
+        const elapsed = t - session.startedAt;
+        if (elapsed >= session.durationMs) {
+          session.finalized = true;
+          return { timeUp: true, finalScore: session.score };
+        }
       }
+
       const { correct } = grade(session.currentQuestion, userAnswer);
       if (correct) session.score += 1;
+
       if (recordsAttempts(session)) {
         const q = session.currentQuestion;
         session.attempts.push({
@@ -92,7 +110,24 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         });
       }
       session.lastQuestionAskedAt = t;
-      // Advance: the previous peek becomes the new current; generate a fresh peek.
+
+      // Daily-gauntlet completion: 60 correct = run done.
+      if (session.mode === 'daily-gauntlet' && correct) {
+        session.currentQuestionIndex += 1;
+        if (session.currentQuestionIndex >= session.totalQuestions) {
+          session.finalized = true;
+          const durationMs = t - session.startTimeMs;
+          session.durationMs = durationMs; // stamp it so flushRunIfRecording can use the right value
+          return {
+            timeUp: true,                  // reuse the existing "run-ended" signal
+            finalScore: session.score,
+            dailyGauntlet: true,
+            durationMs
+          };
+        }
+      }
+
+      // Advance: previous peek becomes current; generate fresh peek.
       session.currentQuestion = session.peekQuestion;
       session.peekQuestion = newQuestion(session);
       return {
@@ -100,7 +135,11 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         nextQuestion: publicQuestion(session.currentQuestion),
         peekQuestion: publicQuestion(session.peekQuestion),
         score: session.score,
-        timeRemainingMs: Math.max(0, session.durationMs - elapsed)
+        timeRemainingMs: session.mode === 'daily-gauntlet'
+          ? null
+          : Math.max(0, session.durationMs - (t - session.startedAt)),
+        questionIndex: session.mode === 'daily-gauntlet' ? session.currentQuestionIndex : null,
+        totalQuestions: session.totalQuestions
       };
     },
 
@@ -125,6 +164,8 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         score: session.score,
         durationMs: session.durationMs,
         practice: session.practice === true,
+        dailyGauntletDate: session.mode === 'daily-gauntlet' ? session.seedDate : null,
+        submittedToLeaderboard: session.mode === 'daily-gauntlet',
         attempts
       };
     },

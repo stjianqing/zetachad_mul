@@ -12,7 +12,7 @@ import boardRoutes from './routes/board.routes.js';
 import practiceRoutes from './routes/practice.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 
-export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessionStore, medianCache } = {}) {
+export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessionStore, medianCache, nowFn = () => new Date() } = {}) {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
 
   await app.register(cookie, { secret: cookieSecret });
@@ -21,8 +21,8 @@ export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessio
   app.addHook('preHandler', makeAuthHook(pool, { cookieSecure }));
 
   await app.register(authRoutes, { pool, cookieSecure });
-  await app.register(playRoutes, { sessionStore, pool, medianCache });
-  await app.register(boardRoutes, { pool, sessionStore });
+  await app.register(playRoutes, { sessionStore, pool, medianCache, nowFn });
+  await app.register(boardRoutes, { pool, sessionStore, nowFn });
   await app.register(practiceRoutes, { pool, sessionStore });
   await app.register(adminRoutes, { pool, medianCache });
 

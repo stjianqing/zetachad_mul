@@ -26,8 +26,20 @@ const state = {
   finalScore: 0,
   currentAnswer: null,
   peekQuestion: null,  // { prompt, op, answer } — pre-fetched next question for instant advance
-  timerExpired: false
+  timerExpired: false,
+  practice: false
 };
+
+function readPracticeSession() {
+  try {
+    const raw = sessionStorage.getItem('zc_practice_session');
+    if (!raw) return null;
+    sessionStorage.removeItem('zc_practice_session');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 
 function isDefaultConfig(c) {
   if (!c) return false;
@@ -71,6 +83,24 @@ async function finalizeOnTimeout() {
 }
 
 async function start() {
+  const practice = readPracticeSession();
+  if (practice) {
+    try { state.authedUser = (await api.me()).user; } catch { state.authedUser = null; }
+    state.practice = true;
+    state.mode = 'user';
+    state.isDefaultConfig = true;
+    state.sessionId = practice.sessionId;
+    state.timeLimitMs = practice.timeLimitMs;
+    state.startedAt = performance.now();
+    els.prompt().textContent = practice.question.prompt;
+    els.timer().textContent = Math.ceil(practice.timeLimitMs / 1000);
+    state.currentAnswer = practice.question.answer;
+    state.peekQuestion = practice.peekQuestion;
+    document.getElementById('practice-badge').classList.remove('hidden');
+    requestAnimationFrame(tickClock);
+    return;
+  }
+
   const cfg = JSON.parse(sessionStorage.getItem('zc_config') || 'null');
   state.config = cfg;
   state.mode = sessionStorage.getItem('zc_mode') || 'guest';
@@ -179,6 +209,24 @@ function finish(finalScore) {
   document.querySelector('.drill-bar').classList.add('hidden');
   document.querySelector('.time-bar').classList.add('hidden');
   els.scoreScreen().classList.remove('hidden');
+
+  if (state.practice) {
+    els.postNote().textContent = 'Practice complete — your updated weak spots will be ready next time you visit Practice.';
+    const actions = els.scoreScreen().querySelector('.actions');
+    actions.innerHTML = '';
+    const a1 = document.createElement('a');
+    a1.className = 'primary';
+    a1.href = 'practice.html';
+    a1.textContent = 'Practice again';
+    const a2 = document.createElement('a');
+    a2.className = 'secondary';
+    a2.href = 'index.html';
+    a2.textContent = 'Play normally';
+    actions.appendChild(a1);
+    actions.appendChild(a2);
+    api.submit(state.sessionId).catch(() => {});
+    return;
+  }
 
   if (state.authedUser && state.isDefaultConfig) {
     showSubmitModal();

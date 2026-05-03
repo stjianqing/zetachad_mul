@@ -837,6 +837,139 @@ button, a.secondary, .auth-form input, .leaderboard-table a {
 .weak-meta { font-size: 0.85em; margin-top: 2px; }
 .weak-time { font-weight: 600; color: #c44; white-space: nowrap; }
 
+/* Landing page: champion banner */
+.champ-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--lime);
+  margin-bottom: 0.75rem;
+  position: relative;
+  overflow: hidden;
+}
+.champ-banner::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 0% 50%, rgba(155, 255, 91, 0.08), transparent 50%),
+    radial-gradient(circle at 100% 50%, rgba(255, 42, 109, 0.08), transparent 50%);
+  pointer-events: none;
+}
+.champ-banner.vacant { border-left-color: var(--ink-faint); }
+.champ-banner.vacant .champ-crown,
+.champ-banner.vacant .champ-title { color: var(--ink-dim); }
+.champ-crown {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--lime);
+  letter-spacing: -0.05em;
+  white-space: pre;
+  text-shadow: 0 0 8px rgba(155, 255, 91, 0.4);
+  flex-shrink: 0;
+}
+.champ-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.champ-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.champ-name {
+  color: var(--magenta);
+  text-shadow: 0 0 6px rgba(255, 42, 109, 0.4);
+}
+.champ-sub {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+/* Landing page: speed kings */
+.speed-kings { margin-bottom: 1rem; }
+.speed-kings-head {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--cyan);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+.speed-kings-sub {
+  color: var(--ink-faint);
+  font-weight: 400;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+.speed-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+@media (max-width: 720px) { .speed-grid { grid-template-columns: 1fr 1fr; } }
+.speed-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 0.6rem 0.75rem;
+}
+.speed-card[data-op="add"] { border-top: 2px solid var(--lime); }
+.speed-card[data-op="sub"] { border-top: 2px solid var(--cyan); }
+.speed-card[data-op="mul"] { border-top: 2px solid var(--magenta); }
+.speed-card[data-op="div"] { border-top: 2px solid var(--orange); }
+.speed-head {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.4rem;
+}
+.speed-sym {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--ink);
+  margin-right: 0.2rem;
+}
+.speed-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+.speed-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.4rem;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.speed-rank {
+  color: var(--ink-faint);
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.speed-row:nth-child(1) .speed-rank { color: var(--magenta); }
+.speed-row:nth-child(2) .speed-rank { color: var(--cyan); }
+.speed-row:nth-child(3) .speed-rank { color: var(--lime); }
+.speed-name {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.speed-time { color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.speed-empty {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
 /* Practice badge on play screen */
 .practice-badge {
   position: fixed;

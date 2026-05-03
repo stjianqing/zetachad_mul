@@ -27,5 +27,7 @@ export const api = {
   startPlay: (config) => request('POST', '/play/start',  { config }),
   answer:    (session_id, answer) => request('POST', '/play/answer', { session_id, answer }),
   submit:    (session_id) => request('POST', '/leaderboard/submit', { session_id }),
-  board:     () => request('GET',  '/leaderboard')
+  board:     () => request('GET',  '/leaderboard'),
+  champion:  () => request('GET',  '/leaderboard/champion'),
+  speed:     () => request('GET',  '/leaderboard/speed')
 };

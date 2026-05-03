@@ -29,6 +29,7 @@ scp -q \
   client/leaderboard.html \
   client/login.html \
   client/play.html \
+  client/practice.html \
   client/register.html \
   "$VPS_HOST:/var/www/zetachad/client/"
 scp -r -q client/css "$VPS_HOST:/var/www/zetachad/client/css"

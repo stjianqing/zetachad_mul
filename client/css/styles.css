@@ -1060,3 +1060,203 @@ button, a.secondary, .auth-form input, .leaderboard-table a {
   padding: 0.05rem 0.25rem;
   border-radius: 2px;
 }
+
+/* ============================================================
+   Daily Gauntlet
+   ============================================================ */
+
+.daily-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 2px solid var(--lime);
+  background: linear-gradient(180deg, rgba(155,255,91,0.07), rgba(155,255,91,0));
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  border-radius: 2px;
+}
+.daily-hero[data-state="completed"],
+.daily-hero[data-state="guest"] {
+  border-color: var(--ink-faint);
+  background: var(--bg-elev);
+}
+.daily-hero-text {
+  flex: 1;
+  min-width: 0;
+}
+.daily-hero-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+  color: var(--lime);
+  text-transform: uppercase;
+}
+.daily-hero[data-state="completed"] .daily-hero-title,
+.daily-hero[data-state="guest"]     .daily-hero-title {
+  color: var(--ink-dim);
+}
+.daily-hero-sub {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+}
+.daily-hero-btn {
+  background: var(--lime);
+  color: var(--bg-deep);
+  border: 2px solid var(--lime);
+  box-shadow: 4px 4px 0 var(--magenta);
+  padding: 0.55rem 1.2rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.daily-hero-btn:hover:not(:disabled) {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--magenta);
+}
+.daily-hero-btn:active:not(:disabled) {
+  transform: translate(0, 0);
+  box-shadow: 0 0 0 var(--magenta);
+}
+.daily-hero-btn:disabled {
+  background: transparent;
+  color: var(--ink-faint);
+  border-color: var(--ink-faint);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.daily-hero[data-state="guest"] .daily-hero-btn {
+  background: transparent;
+  color: var(--magenta);
+  border-color: var(--magenta);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.daily-board {
+  margin: 1.25rem 0;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+.daily-board h2 {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin: 0 0 0.5rem;
+  color: var(--ink-dim);
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.daily-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+.daily-board-list li.overlord {
+  color: var(--lime);
+  font-weight: 500;
+}
+.daily-board-list li.overlord strong {
+  color: var(--magenta);
+  font-weight: 700;
+}
+.daily-board-list li.you {
+  color: var(--cyan);
+}
+.daily-board-list .dim {
+  color: var(--ink-faint);
+}
+.daily-board-link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--cyan);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.daily-board-link:hover { color: var(--magenta); }
+
+.mode-pill {
+  display: inline-block;
+  background: transparent;
+  color: var(--lime);
+  border: 1px solid var(--lime);
+  padding: 0.15rem 0.5rem;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  align-self: flex-start;
+}
+
+.daily-finish-headline {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 1rem 0 0.25rem;
+  color: var(--lime);
+  text-align: center;
+}
+.daily-finish-sub {
+  color: var(--ink-dim);
+  text-align: center;
+  margin: 0 0 1rem;
+}
+.daily-finish-time {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 3rem;
+  text-align: center;
+  color: var(--cyan);
+  margin: 0.5rem 0 1.5rem;
+  letter-spacing: 0.04em;
+}
+
+.board-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.board-tabs .tab {
+  background: transparent;
+  color: var(--ink-dim);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.board-tabs .tab:hover { color: var(--cyan); }
+.board-tabs .tab.active {
+  color: var(--lime);
+  border-bottom-color: var(--lime);
+}
+
+@media (max-width: 640px) {
+  .daily-hero {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .daily-hero-btn { align-self: flex-end; }
+  .daily-finish-headline { font-size: 1.5rem; }
+  .daily-finish-time { font-size: 2.25rem; }
+}

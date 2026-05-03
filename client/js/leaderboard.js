@@ -6,6 +6,13 @@ function fmtDate(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function formatTimeMs(ms) {
+  const totalS = Math.floor(ms / 1000);
+  const m = Math.floor(totalS / 60);
+  const s = totalS % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 function rowsHtml(entries, me) {
   if (entries.length === 0) {
     return `<tr><td colspan="5">No scores yet — be the first.</td></tr>`;
@@ -30,7 +37,7 @@ function formatDiff(d) {
 }
 
 function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
 function renderUserArea(user) {
@@ -47,10 +54,52 @@ function renderUserArea(user) {
   }
 }
 
+function showTab(name) {
+  document.querySelectorAll('#board-tabs .tab').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+  document.getElementById('all-time-board').classList.toggle('hidden', name !== 'all-time');
+  document.getElementById('daily-board-section').classList.toggle('hidden', name !== 'daily');
+}
+
+let dailyLoaded = false;
+async function loadDailyBoard() {
+  if (dailyLoaded) return;
+  dailyLoaded = true;
+  const tbody = document.querySelector('#daily-board-table tbody');
+  let board;
+  try { board = await api.dailyBoard(); }
+  catch { tbody.innerHTML = '<tr><td colspan="4" class="dim">Could not load.</td></tr>'; return; }
+  document.getElementById('daily-board-heading').textContent = `Daily Leaderboard — ${board.date}`;
+  if (board.entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="dim">Nobody has played today yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = board.entries.map(e => `
+    <tr>
+      <td data-label="#">${e.rank}</td>
+      <td data-label="Player">${escapeHtml(e.username)}</td>
+      <td data-label="Time">${formatTimeMs(e.time_ms)}</td>
+      <td data-label="Played" class="dim">${new Date(e.played_at).toLocaleTimeString()}</td>
+    </tr>
+  `).join('');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   let me = null;
   try { me = (await api.me()).user; } catch {}
   renderUserArea(me);
+
+  document.querySelectorAll('#board-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.tab;
+      showTab(name);
+      if (name === 'daily') await loadDailyBoard();
+    });
+  });
+
+  if (location.hash === '#daily') {
+    showTab('daily');
+    loadDailyBoard();
+  }
 
   try {
     const { entries } = await api.board();

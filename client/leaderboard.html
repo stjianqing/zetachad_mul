@@ -20,36 +20,49 @@
   </header>
   <main id="app" class="narrow">
     <h1>Leaderboard</h1>
-    <div class="default-summary">
-      Default config: all four ops · 120 s · add 2–100 · sub 2–100 · mul 2–12×2–100 · div 2–12×2–100.
-    </div>
-    <table class="leaderboard-table">
-      <thead><tr><th>#</th><th>Player</th><th>Score</th><th>Diff</th><th>Played</th></tr></thead>
-      <tbody id="rows"><tr><td colspan="5">Loading…</td></tr></tbody>
-    </table>
-    <p class="board-caption">
-      That's Diff — average puzzle pain, 0–10. Two 50s aren't the same 50 if one guy kept getting 2+2.
-    </p>
-    <details class="diff-math">
-      <summary>Show the math</summary>
-      <div class="diff-math-body">
-        <p><strong>Time-weighted, not a flat average.</strong><br>
-        Time-weighted: <code>D = Σ(d_i × t_i) / Σ t_i</code>. Each puzzle's contribution is scaled by the time you spent on it.<br>
-        A 30-second hard puzzle (<code>d=8</code>) and a 2-second easy one (<code>d=1</code>) flat-average to 4.5, which makes the run look way easier than it felt. Time-weighted: <code>(8×30 + 1×2)/32 = 7.6</code>. This method lets the 30 sec difficulty feel more significant.</p>
-
-        <p><strong>Cluster median, not your own time.</strong><br>
-        Difficulty per puzzle: <code>d_i = 10 × (m_c − 1500) / 5500</code>, where <code>m_c</code> is the global median response time for that puzzle's cluster (e.g. <code>mul_hard_large</code>). Your speed never enters the formula, only the puzzle's reputation across all players. So 12×8 has the same <code>d</code> whether you did it in 2s or 9s.</p>
-
-        <p><strong>Median, not mean (for <code>m_c</code>).</strong><br>
-        One AFK player sitting on 12×8 for 60 seconds would drag the mean up and make the puzzle look harder than it is. Median ignores them. We compute <code>m_c</code> as the median of all correct, non-practice attempts in the cluster.</p>
-
-        <p><strong>Time capped: <code>t_i = min(response_ms, 15000)</code>.</strong><br>
-        Same outlier problem on the run side. If you alt-tabbed for 30s, that puzzle wasn't 30-seconds-hard, you just left. Capping stops one distracted moment from dominating <code>Σ t_i</code>.</p>
-
-        <p><strong>Floor 1.5s, ceiling 7s in the <code>d</code> formula.</strong><br>
-        1.5s is roughly the fastest a human can read-and-type, so anything that fast scores 0. Around 7s is where puzzles start actually hurting, so that's the 10. Linear in between. Picked from eyeballing real attempt data, clamps to <code>[0, 10]</code> so weird clusters can't blow past the scale.</p>
+    <nav class="board-tabs" id="board-tabs">
+      <button class="tab active" data-tab="all-time">ALL-TIME</button>
+      <button class="tab" data-tab="daily">TODAY'S DAILY</button>
+    </nav>
+    <section id="all-time-board">
+      <div class="default-summary">
+        Default config: all four ops · 120 s · add 2–100 · sub 2–100 · mul 2–12×2–100 · div 2–12×2–100.
       </div>
-    </details>
+      <table class="leaderboard-table">
+        <thead><tr><th>#</th><th>Player</th><th>Score</th><th>Diff</th><th>Played</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5">Loading…</td></tr></tbody>
+      </table>
+      <p class="board-caption">
+        That's Diff — average puzzle pain, 0–10. Two 50s aren't the same 50 if one guy kept getting 2+2.
+      </p>
+      <details class="diff-math">
+        <summary>Show the math</summary>
+        <div class="diff-math-body">
+          <p><strong>Time-weighted, not a flat average.</strong><br>
+          Time-weighted: <code>D = Σ(d_i × t_i) / Σ t_i</code>. Each puzzle's contribution is scaled by the time you spent on it.<br>
+          A 30-second hard puzzle (<code>d=8</code>) and a 2-second easy one (<code>d=1</code>) flat-average to 4.5, which makes the run look way easier than it felt. Time-weighted: <code>(8×30 + 1×2)/32 = 7.6</code>. This method lets the 30 sec difficulty feel more significant.</p>
+
+          <p><strong>Cluster median, not your own time.</strong><br>
+          Difficulty per puzzle: <code>d_i = 10 × (m_c − 1500) / 5500</code>, where <code>m_c</code> is the global median response time for that puzzle's cluster (e.g. <code>mul_hard_large</code>). Your speed never enters the formula, only the puzzle's reputation across all players. So 12×8 has the same <code>d</code> whether you did it in 2s or 9s.</p>
+
+          <p><strong>Median, not mean (for <code>m_c</code>).</strong><br>
+          One AFK player sitting on 12×8 for 60 seconds would drag the mean up and make the puzzle look harder than it is. Median ignores them. We compute <code>m_c</code> as the median of all correct, non-practice attempts in the cluster.</p>
+
+          <p><strong>Time capped: <code>t_i = min(response_ms, 15000)</code>.</strong><br>
+          Same outlier problem on the run side. If you alt-tabbed for 30s, that puzzle wasn't 30-seconds-hard, you just left. Capping stops one distracted moment from dominating <code>Σ t_i</code>.</p>
+
+          <p><strong>Floor 1.5s, ceiling 7s in the <code>d</code> formula.</strong><br>
+          1.5s is roughly the fastest a human can read-and-type, so anything that fast scores 0. Around 7s is where puzzles start actually hurting, so that's the 10. Linear in between. Picked from eyeballing real attempt data, clamps to <code>[0, 10]</code> so weird clusters can't blow past the scale.</p>
+        </div>
+      </details>
+    </section>
+    <section id="daily-board-section" class="hidden">
+      <h2 id="daily-board-heading">Today's Daily Leaderboard</h2>
+      <table class="leaderboard-table" id="daily-board-table">
+        <thead><tr><th>#</th><th>Player</th><th>Time</th><th>Played</th></tr></thead>
+        <tbody><tr><td colspan="4" class="dim">Loading…</td></tr></tbody>
+      </table>
+    </section>
   </main>
   <script type="module" src="js/leaderboard.js"></script>
 </body>

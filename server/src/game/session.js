@@ -20,7 +20,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
   }
 
   function newQuestion(session) {
-    return generate(session.config, session.rng);
+    return generate(session.config, session.rng, session.weighting);
   }
 
   function publicQuestion(q) {
@@ -32,7 +32,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
   }
 
   return {
-    start({ userId, config }) {
+    start({ userId, config, practice = false, weighting = null }) {
       const sessionId = makeId();
       const startedAt = now();
       const rng = makeRng(nextSeed());
@@ -40,6 +40,8 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         id: sessionId,
         userId: userId ?? null,
         config,
+        practice,
+        weighting,
         startedAt,
         lastTouchedAt: startedAt,
         durationMs: config.durationMs,
@@ -52,8 +54,8 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         lastQuestionAskedAt: startedAt,
         runId: null
       };
-      session.currentQuestion = generate(session.config, session.rng);
-      session.peekQuestion = generate(session.config, session.rng);
+      session.currentQuestion = generate(session.config, session.rng, session.weighting);
+      session.peekQuestion = generate(session.config, session.rng, session.weighting);
       sessions.set(sessionId, session);
       return {
         sessionId,

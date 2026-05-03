@@ -82,7 +82,7 @@ If Bob accepts and starts the run but never submits (closes tab, refreshes, netw
 
 ## Constraints and edge cases
 
-- **Standard runs only.** The CHALLENGE block does not appear on Daily Gauntlet score screens. The server rejects challenge creation if the source run was a Daily Gauntlet run.
+- **Standard, default-config, non-practice runs only.** The CHALLENGE block does not appear on Daily Gauntlet, practice, or custom-config score screens. The server rejects challenge creation in any of those cases. Practice mode is excluded because its cluster-weighted question generation is non-deterministic from seed alone (depends on `cluster_medians` snapshot); custom configs are excluded so the recipient never gets sandbagged with an unfamiliar setup.
 - **One attempt per challenge.** No retries, no expiration on acceptance, no expiration on the challenge itself.
 - **Self-challenge blocked.** UI greys out send when the username matches the user's own; server returns 400 if forced.
 - **Tie-break.** Equal scores → faster `runs.duration_ms` wins. Caption acknowledges closeness ("47-47, but you finished 3.2s faster — STILL HAIL.").
@@ -142,15 +142,23 @@ The seed used to generate this run's question sequence. Required so a challenge 
 
 ### Components
 
-1. **Seeded question generator** (`server/src/game/seed.ts`, also imported client-side). Pure function `(seed, config) → Question[]`. Same seed + same config = identical sequence. Daily Gauntlet needs the same primitive; whichever feature ships first owns the implementation.
-2. **Challenge API** (`server/src/routes/challenges.ts`). All endpoints listed in the API section.
-3. **Forfeit sweep** (`server/src/jobs/forfeit-sweep.ts`). Runs every 5 minutes. Marks accepted-but-stale challenges as forfeited.
-4. **Ghost replay component** (`client/src/play/ghost-ticker.ts`). Receives `challenger_attempts` at run start, advances ghost score against wall-clock as recipient plays.
-5. **Drag race animation** (`client/src/result/drag-race.ts`). Receives both runs' attempts, plays a ~20s time-compressed race.
-6. **Head-to-head view** (`client/src/result/head-to-head.ts`). Static table joining attempts by `q_index`.
-7. **Notifications panel** (`client/src/home/notifications.ts`). Loads on home page. Shows pending incoming challenges as a modal queue (one at a time) and unread results as a list.
-8. **Pending outgoing panel** (`client/src/home/pending-outgoing.ts`). Collapsed-by-default section showing outgoing challenge statuses. Refreshes on page load.
-9. **Share-link landing** (`client/src/challenge-link/landing.ts`). Public page at `/challenge/:token`.
+1. **Seeded question generator** — already exists at `server/src/game/generator.js` with `makeRng(seed)` (mulberry32). Reused as-is. The challenger's run already runs through `generate(config, rng, weighting)`; we just need to *persist the seed* so the recipient can re-derive the same sequence.
+2. **Challenge API** (`server/src/routes/challenges.routes.js`). All endpoints listed in the API section.
+3. **Forfeit sweep** (`server/src/jobs/forfeit-sweep.js`). Runs every 5 minutes via `setInterval`, registered in `server/src/index.js` alongside the existing session-eviction timer.
+4. **Ghost replay component** (`client/js/ghost-ticker.js`). Loaded by `play.js` when a challenge run starts. Receives `challenger_attempts` and advances ghost score against wall-clock.
+5. **Drag race animation** (`client/js/drag-race.js`). Receives both runs' attempts, plays a ~20s time-compressed race on the post-run screen.
+6. **Head-to-head view** (`client/js/head-to-head.js`). Renders the static table joining attempts by `q_index`.
+7. **Notifications + outgoing panel** (`client/js/challenges-home.js`). Loaded by `landing.js`. Renders incoming-challenge modal queue and outgoing/unread-results panel.
+8. **Share-link landing** — new HTML page `client/challenge.html` + `client/js/challenge-landing.js`, served on `/challenge/:token`.
+
+**Eligibility rules for challenge sources** (all enforced server-side at `POST /api/challenges`):
+- Run must have a non-null `seed` (i.e., post-migration, non-daily-gauntlet).
+- Run's config must be the default config (`isDefaultConfig`).
+- Run must not be a practice run (`practice = false`).
+- Run must not be a daily-gauntlet run (`daily_gauntlet_date IS NULL`).
+- Run must belong to the requesting user.
+
+These constraints together guarantee deterministic replay: practice mode's cluster-bias weighting is non-deterministic (it depends on `cluster_medians` at run time) and would break replay; non-default configs would let the challenger send a custom-tuned config that the recipient hasn't opted into; daily-gauntlet runs are already shared globally.
 
 ### Data flow
 
@@ -201,9 +209,9 @@ POST   /api/challenges
   Auth: required (must own challenger_run_id)
   Returns: { id, status, share_url? }
   Errors:
-    400 if challenger_run_id is a Daily Gauntlet run
+    400 if challenger_run_id is ineligible (daily-gauntlet / practice /
+        custom config / no seed / not owned by current user)
     400 if recipient_username == current user
-    400 if challenger_run_id has no seed (legacy run)
     404 if recipient_username not found
 
 GET    /api/challenges/incoming
@@ -421,6 +429,8 @@ All user-facing copy is illustrative in this spec — final strings drafted at i
 - Create challenge by share link — generates token, returns share_url, recipient_id NULL.
 - Self-challenge blocked — 400.
 - Challenge from a Daily Gauntlet run blocked — 400.
+- Challenge from a practice run blocked — 400.
+- Challenge from a custom-config (non-default) run blocked — 400.
 - Challenge from a legacy run (no seed) blocked — 400.
 - Incoming list — only `status='pending'` for the requesting user.
 - Outgoing list — all statuses, only requesting user's challenges.

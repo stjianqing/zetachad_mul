@@ -26,11 +26,19 @@ function tableGroup(n) {
   return null;
 }
 
+function freezeDeep(obj) {
+  Object.freeze(obj);
+  for (const v of Object.values(obj)) {
+    if (v !== null && typeof v === 'object' && !Object.isFrozen(v)) freezeDeep(v);
+  }
+  return obj;
+}
+
 // Cluster bounds — used by the generator to sample operands within a cluster.
 // For mul: lhsValues = the small "table" operand, rhsRange = the partner.
 // For div: lhsValues = the divisor, rhsRange = the dividend (presented as dividend ÷ divisor).
 // For add/sub: maxRange = bound on max(lhs, rhs); both operands sampled in [2, max].
-export const CLUSTER_BOUNDS = Object.freeze({
+export const CLUSTER_BOUNDS = freezeDeep({
   // Multiplication
   mul_easy_small: { op: 'mul', lhsValues: [2, 5, 10],     rhsMin: 2,  rhsMax: 30  },
   mul_easy_large: { op: 'mul', lhsValues: [2, 5, 10],     rhsMin: 31, rhsMax: 100 },

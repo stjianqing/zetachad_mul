@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bucketize, CLUSTER_LABELS, GLOBAL_P50 } from '../../../src/practice/clusters.js';
+import { bucketize, CLUSTER_LABELS, CLUSTER_BOUNDS, GLOBAL_P50 } from '../../../src/practice/clusters.js';
 
 test('bucketize: mul easy small (lhs=2, rhs=15 → mul_easy_small)', () => {
   assert.equal(bucketize('mul', 2, 15), 'mul_easy_small');
@@ -27,11 +27,15 @@ test('bucketize: mul hard large (lhs=7,8,9,12 with rhs>30)', () => {
   assert.equal(bucketize('mul', 12, 75), 'mul_hard_large');
 });
 
-test('bucketize: mul order-independent (treats min(lhs,rhs) as the table)', () => {
-  // generator stores lhs as the table operand for mul, but if input order is reversed
-  // (e.g. attempt logged with lhs=50, rhs=12), bucketize should still classify by the small one.
+test('bucketize: mul falls back to rhs when lhs is out of range; lhs wins on ties', () => {
+  // If lhs is out of 2..12, rhs is used as the table operand.
+  // (e.g. attempt logged with lhs=50, rhs=12 — rhs is the table)
   assert.equal(bucketize('mul', 50, 12), 'mul_hard_large');
   assert.equal(bucketize('mul', 75, 7), 'mul_hard_large');
+
+  // When both operands fall in 2..12, lhs takes priority for the table classification.
+  assert.equal(bucketize('mul', 3, 7), 'mul_med_small');  // lhs=3 (med) wins
+  assert.equal(bucketize('mul', 7, 3), 'mul_hard_small'); // lhs=7 (hard) wins
 });
 
 test('bucketize: div uses divisor (the small operand) for difficulty', () => {
@@ -83,4 +87,30 @@ test('GLOBAL_P50 has values for all four ops', () => {
   assert.equal(GLOBAL_P50.sub, 1898);
   assert.equal(GLOBAL_P50.mul, 2661);
   assert.equal(GLOBAL_P50.div, 2820);
+});
+
+test('CLUSTER_BOUNDS structure: 18 keys, correct op fields, required fields present, entries frozen', () => {
+  const keys = Object.keys(CLUSTER_BOUNDS);
+  assert.equal(keys.length, 18);
+
+  const MUL_FIELDS    = ['op', 'lhsValues', 'rhsMin', 'rhsMax'];
+  const DIV_FIELDS    = ['op', 'divisorValues', 'dividendMin', 'dividendMax'];
+  const ADDSUB_FIELDS = ['op', 'maxMin', 'maxMax'];
+
+  for (const key of keys) {
+    const entry = CLUSTER_BOUNDS[key];
+    const prefix = key.split('_')[0]; // 'mul' | 'div' | 'add' | 'sub'
+
+    assert.equal(entry.op, prefix, `${key}: op field mismatch`);
+    assert.ok(Object.isFrozen(entry), `${key}: entry should be frozen`);
+
+    const required =
+      prefix === 'mul' ? MUL_FIELDS :
+      prefix === 'div' ? DIV_FIELDS :
+      ADDSUB_FIELDS;
+
+    for (const field of required) {
+      assert.ok(field in entry, `${key}: missing field '${field}'`);
+    }
+  }
 });

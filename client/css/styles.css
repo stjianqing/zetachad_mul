@@ -812,3 +812,42 @@ main#app h2::before { content: "> "; color: var(--cyan); }
 button, a.secondary, .auth-form input, .leaderboard-table a {
   min-height: 44px;
 }
+
+/* Practice page */
+.muted { color: var(--text-muted, #888); }
+.subtitle { color: var(--text-muted, #888); margin-bottom: 1.25rem; }
+.label { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted, #888); margin-top: 1rem; }
+
+.weak-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 24px;
+  border-top: 1px solid var(--border);
+}
+.weak-spot-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+}
+.weak-left { flex: 1; }
+.weak-label { font-weight: 600; }
+.weak-meta { font-size: 0.85em; margin-top: 2px; }
+.weak-time { font-weight: 600; color: #c44; white-space: nowrap; }
+
+/* Practice badge on play screen */
+.practice-badge {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  background: #c44;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  z-index: 10;
+}

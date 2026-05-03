@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <title>Practice — ZetaChad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">ZetaChad</a>
+    <nav>
+      <a href="index.html">Drill</a>
+      <a href="practice.html" aria-current="page">Practice</a>
+      <a href="leaderboard.html">Leaderboard</a>
+      <span id="user-area"></span>
+    </nav>
+  </header>
+  <main id="app" class="narrow">
+    <h1>Practice mode</h1>
+
+    <div id="loading" class="muted">Analysing your recent attempts…</div>
+
+    <section id="ready" class="hidden">
+      <p class="subtitle">A 2-minute run focused on your 3 weakest areas. Won't affect your leaderboard score.</p>
+      <div class="label">Your weak spots</div>
+      <ul id="weak-list" class="weak-list"></ul>
+      <button class="primary" id="start-btn">Start practice</button>
+    </section>
+
+    <section id="need-more" class="hidden">
+      <p>Play a few normal rounds first — practice mode unlocks once we have enough data to find your weak spots.</p>
+      <a class="primary" href="index.html">Go to drill</a>
+    </section>
+
+    <section id="auth-required" class="hidden">
+      <p>You need to be logged in to use practice mode.</p>
+      <a class="primary" href="login.html?next=/practice.html">Log in</a>
+    </section>
+
+    <section id="error" class="hidden">
+      <p>Something went wrong. <button id="retry-btn">Try again</button></p>
+    </section>
+  </main>
+  <script type="module" src="js/practice.js"></script>
+</body>
+</html>

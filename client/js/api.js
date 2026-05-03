@@ -25,9 +25,12 @@ export const api = {
   login:     ({ username, password }) => request('POST', '/login',    { username, password }),
   logout:    () => request('POST', '/logout'),
   startPlay: (config) => request('POST', '/play/start',  { config }),
+  startDailyGauntlet: () => request('POST', '/play/start', { mode: 'daily-gauntlet' }),
   answer:    (session_id, answer) => request('POST', '/play/answer', { session_id, answer }),
   submit:    (session_id) => request('POST', '/leaderboard/submit', { session_id }),
   board:     () => request('GET',  '/leaderboard'),
   champion:  () => request('GET',  '/leaderboard/champion'),
-  speed:     () => request('GET',  '/leaderboard/speed')
+  speed:     () => request('GET',  '/leaderboard/speed'),
+  dailyBoard: (date) => request('GET', '/leaderboard/daily' + (date ? `?date=${date}` : '')),
+  dailyMe:   () => request('GET', '/leaderboard/daily/me')
 };

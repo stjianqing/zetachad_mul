@@ -8,17 +8,25 @@ function fmtDate(iso) {
 
 function rowsHtml(entries, me) {
   if (entries.length === 0) {
-    return `<tr><td colspan="4">No scores yet — be the first.</td></tr>`;
+    return `<tr><td colspan="5">No scores yet — be the first.</td></tr>`;
   }
   return entries.map((e) => {
     const youClass = me && e.username === me.username ? ' class="you"' : '';
+    const diffCell = formatDiff(e.difficulty);
     return `<tr${youClass}>
       <td data-label="#">${e.rank}</td>
       <td data-label="Player">${escapeHtml(e.username)}</td>
       <td data-label="Score">${e.score}</td>
+      <td data-label="Diff">${diffCell}</td>
       <td data-label="Played">${fmtDate(e.played_at)}</td>
     </tr>`;
   }).join('');
+}
+
+function formatDiff(d) {
+  if (d == null) return `<span class="diff-cell diff-na">—</span>`;
+  const tier = d <= 4 ? 'easy' : d <= 6 ? 'mid' : d <= 8 ? 'hard' : 'extreme';
+  return `<span class="diff-cell diff-${tier}">${d.toFixed(1)}</span>`;
 }
 
 function escapeHtml(s) {
@@ -48,6 +56,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const { entries } = await api.board();
     document.getElementById('rows').innerHTML = rowsHtml(entries, me);
   } catch (e) {
-    document.getElementById('rows').innerHTML = `<tr><td colspan="4">Could not load: ${escapeHtml(e.message)}</td></tr>`;
+    document.getElementById('rows').innerHTML = `<tr><td colspan="5">Could not load: ${escapeHtml(e.message)}</td></tr>`;
   }
 });

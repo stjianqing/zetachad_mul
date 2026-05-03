@@ -1,4 +1,6 @@
-export default async function playRoutes(fastify, { sessionStore, pool }) {
+import { computeRunDifficulty } from '../run-difficulty/compute.js';
+
+export default async function playRoutes(fastify, { sessionStore, pool, medianCache }) {
   const answerLimit = {
     max: 120,
     timeWindow: '1 minute',
@@ -13,16 +15,8 @@ export default async function playRoutes(fastify, { sessionStore, pool }) {
     const r = sessionStore.start({ userId: req.user?.id ?? null, config });
     return {
       session_id: r.sessionId,
-      question: {
-        prompt: r.question.prompt,
-        op: r.question.op,
-        answer: r.question.answer
-      },
-      peek_question: {
-        prompt: r.peekQuestion.prompt,
-        op: r.peekQuestion.op,
-        answer: r.peekQuestion.answer
-      },
+      question: { prompt: r.question.prompt, op: r.question.op, answer: r.question.answer },
+      peek_question: { prompt: r.peekQuestion.prompt, op: r.peekQuestion.op, answer: r.peekQuestion.answer },
       time_limit_ms: r.timeLimitMs
     };
   });
@@ -38,16 +32,8 @@ export default async function playRoutes(fastify, { sessionStore, pool }) {
     }
     return {
       correct: r.correct,
-      next_question: {
-        prompt: r.nextQuestion.prompt,
-        op: r.nextQuestion.op,
-        answer: r.nextQuestion.answer
-      },
-      peek_question: {
-        prompt: r.peekQuestion.prompt,
-        op: r.peekQuestion.op,
-        answer: r.peekQuestion.answer
-      },
+      next_question: { prompt: r.nextQuestion.prompt, op: r.nextQuestion.op, answer: r.nextQuestion.answer },
+      peek_question: { prompt: r.peekQuestion.prompt, op: r.peekQuestion.op, answer: r.peekQuestion.answer },
       score: r.score,
       time_remaining_ms: r.timeRemainingMs
     };
@@ -57,16 +43,24 @@ export default async function playRoutes(fastify, { sessionStore, pool }) {
     const rec = sessionStore.takeRunRecord(sessionId);
     if (!rec || rec.userId == null || rec.attempts.length === 0) return;
 
+    // Map session-store snake/camel to the shape computeRunDifficulty expects.
+    const attemptsForDifficulty = rec.attempts.map(a => ({
+      op: a.op, lhs: a.lhs, rhs: a.rhs,
+      response_ms: a.responseMs, correct: a.correct
+    }));
+    const difficulty = medianCache
+      ? computeRunDifficulty(attemptsForDifficulty, medianCache)
+      : null;
+
     let client;
     try {
       client = await pool.connect();
       await client.query('BEGIN');
       const insRun = await client.query(
-        'INSERT INTO runs (user_id, score, duration_ms, practice) VALUES ($1, $2, $3, $4) RETURNING id',
-        [rec.userId, rec.score, rec.durationMs, rec.practice]
+        'INSERT INTO runs (user_id, score, duration_ms, practice, difficulty) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [rec.userId, rec.score, rec.durationMs, rec.practice, difficulty]
       );
       const runId = Number(insRun.rows[0].id);
-      // Bulk insert attempts. Build the VALUES clause with placeholders.
       const cols = ['run_id', 'q_index', 'op', 'lhs', 'rhs', 'answer', 'user_answer', 'response_ms', 'correct', 'asked_at'];
       const values = [];
       const placeholders = rec.attempts.map((a, i) => {
@@ -80,9 +74,11 @@ export default async function playRoutes(fastify, { sessionStore, pool }) {
       );
       await client.query('COMMIT');
 
-      // Stamp runId on the live in-memory session so submit can find it.
       const live = sessionStore.get(sessionId);
-      if (live) live.runId = runId;
+      if (live) {
+        live.runId = runId;
+        live.difficulty = difficulty;
+      }
     } catch (err) {
       if (client) {
         try { await client.query('ROLLBACK'); } catch { /* ignore */ }

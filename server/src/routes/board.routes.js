@@ -14,24 +14,19 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
 
     const finished = sessionStore.finish(session_id);
 
-    // Practice runs: don't flip submitted_to_leaderboard, don't compute rank.
-    // The runs row was already inserted with practice=true at time-up flush.
     if (session.practice === true) {
-      return { ok: true, practice: true, run_id: session.runId };
+      return { ok: true, practice: true, run_id: session.runId, difficulty: session.difficulty ?? null };
     }
 
     if (!finished.qualifies) {
       return reply.code(422).send({ error: 'not_eligible', qualifies: false });
     }
 
-    // Idempotency: a session can be submitted only once.
     if (session.submitted) {
-      return { ok: true, rank: session.lastRank, idempotent: true };
+      return { ok: true, rank: session.lastRank, idempotent: true, difficulty: session.difficulty ?? null };
     }
 
     if (session.runId == null) {
-      // Time-up flush failed (logged at flush time). This session's analytics
-      // are unrecoverable — submit cannot re-attempt the flush. Rare; logged for follow-up.
       return reply.code(409).send({ error: 'not_finalized' });
     }
 
@@ -40,7 +35,6 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
       [session.runId]
     );
 
-    // Compute rank: number of users whose best submitted score is strictly greater, plus 1.
     const { rows } = await pool.query(
       `WITH best AS (
          SELECT user_id, MAX(score) AS s
@@ -61,14 +55,14 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
     session.submitted = true;
     session.lastRank = rank;
 
-    return { ok: true, rank, run_id: session.runId };
+    return { ok: true, rank, run_id: session.runId, difficulty: session.difficulty ?? null };
   });
 
   fastify.get('/api/leaderboard', async () => {
     const { rows } = await pool.query(
-      `SELECT u.username, b.score, b.played_at
+      `SELECT u.username, b.score, b.difficulty, b.played_at
        FROM (
-         SELECT DISTINCT ON (user_id) user_id, score, played_at
+         SELECT DISTINCT ON (user_id) user_id, score, difficulty, played_at
          FROM runs
          WHERE submitted_to_leaderboard = true
          ORDER BY user_id, score DESC, played_at ASC
@@ -81,8 +75,55 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
         rank: i + 1,
         username: r.username,
         score: r.score,
+        difficulty: r.difficulty == null ? null : Number(r.difficulty),
         played_at: r.played_at.toISOString()
       }))
     };
+  });
+
+  fastify.get('/api/leaderboard/champion', async () => {
+    const { rows } = await pool.query(
+      `SELECT u.username, MAX(r.score) AS score
+       FROM runs r JOIN users u ON u.id = r.user_id
+       WHERE r.submitted_to_leaderboard = true
+       GROUP BY u.username
+       ORDER BY score DESC
+       LIMIT 1`
+    );
+    if (rows.length === 0) return { champion: null };
+    return { champion: { username: rows[0].username, score: Number(rows[0].score) } };
+  });
+
+  fastify.get('/api/leaderboard/speed', async () => {
+    const MIN_ATTEMPTS = 50;
+    const { rows } = await pool.query(
+      `WITH per_user_op AS (
+         SELECT u.username, a.op,
+                AVG(a.response_ms)::int AS avg_ms,
+                COUNT(*)::int AS n
+         FROM attempts a
+         JOIN runs r ON r.id = a.run_id
+         JOIN users u ON u.id = r.user_id
+         WHERE a.correct = true
+           AND COALESCE(r.practice, false) = false
+         GROUP BY u.username, a.op
+         HAVING COUNT(*) >= $1
+       ),
+       ranked AS (
+         SELECT username, op, avg_ms, n,
+                ROW_NUMBER() OVER (PARTITION BY op ORDER BY avg_ms ASC) AS rk
+         FROM per_user_op
+       )
+       SELECT op, username, avg_ms, n, rk
+       FROM ranked
+       WHERE rk <= 3
+       ORDER BY op, rk`,
+      [MIN_ATTEMPTS]
+    );
+    const ops = { add: [], sub: [], mul: [], div: [] };
+    for (const r of rows) {
+      if (ops[r.op]) ops[r.op].push({ username: r.username, avgMs: r.avg_ms, n: r.n });
+    }
+    return ops;
   });
 }

@@ -1,6 +1,7 @@
 import { makePool, migrate } from '../../src/db.js';
 import { createSessionStore } from '../../src/game/session.js';
 import { buildApp } from '../../src/index.js';
+import { MedianCache } from '../../src/run-difficulty/median-cache.js';
 
 const TEST_COOKIE_SECRET = 'a'.repeat(64);
 
@@ -19,15 +20,18 @@ export async function getPool() {
 export async function freshApp() {
   const pool = await getPool();
   if (!pool) return null;
-  await pool.query('TRUNCATE attempts, runs, auth_sessions, users RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE attempts, runs, auth_sessions, users, cluster_medians RESTART IDENTITY CASCADE');
   const sessionStore = createSessionStore({});
+  const medianCache = new MedianCache({ pool });
+  medianCache.loadFromRows([]); // empty by default; tests seed via cluster_medians directly or call refresh()
   const app = await buildApp({
     pool,
     cookieSecret: TEST_COOKIE_SECRET,
     cookieSecure: false,
-    sessionStore
+    sessionStore,
+    medianCache
   });
-  return { app, pool, sessionStore };
+  return { app, pool, sessionStore, medianCache };
 }
 
 export function cookieFromResponse(res) {

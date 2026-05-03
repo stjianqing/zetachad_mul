@@ -17,10 +17,11 @@ echo "==> Ensure remote dirs"
 ssh "$VPS_HOST" "mkdir -p /srv/zetachad/server /var/www/zetachad/client /var/www/zetachad/admin"
 
 echo "==> Sync server"
-ssh "$VPS_HOST" "rm -rf /srv/zetachad/server/src /srv/zetachad/server/migrations"
+ssh "$VPS_HOST" "rm -rf /srv/zetachad/server/src /srv/zetachad/server/migrations /srv/zetachad/server/scripts"
 scp -q server/package.json server/package-lock.json "$VPS_HOST:/srv/zetachad/server/"
 scp -r -q server/src "$VPS_HOST:/srv/zetachad/server/src"
 scp -r -q server/migrations "$VPS_HOST:/srv/zetachad/server/migrations"
+scp -r -q server/scripts "$VPS_HOST:/srv/zetachad/server/scripts"
 
 echo "==> Sync client (non-admin)"
 ssh "$VPS_HOST" "rm -rf /var/www/zetachad/client/css /var/www/zetachad/client/js"

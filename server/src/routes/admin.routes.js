@@ -1,7 +1,23 @@
 import { requireAdmin } from '../admin-auth.js';
 
-export default async function adminRoutes(fastify, { pool }) {
+export default async function adminRoutes(fastify, { pool, medianCache }) {
   fastify.addHook('preHandler', requireAdmin);
+
+  fastify.post('/admin/api/refresh-medians', async (req, reply) => {
+    if (!medianCache) return reply.code(503).send({ error: 'median_cache_unavailable' });
+    try {
+      await medianCache.refresh();
+      const all = medianCache.getAll();
+      return {
+        ok: true,
+        clusters: all.size,
+        medians: Object.fromEntries(all)
+      };
+    } catch (err) {
+      req.log.error({ err }, 'refresh-medians failed');
+      return reply.code(500).send({ error: 'refresh_failed' });
+    }
+  });
 
   fastify.get('/admin/api/players', async () => {
     const { rows } = await pool.query(

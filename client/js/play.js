@@ -210,6 +210,11 @@ function finish(finalScore) {
   document.querySelector('.time-bar').classList.add('hidden');
   els.scoreScreen().classList.remove('hidden');
 
+  // Difficulty for practice runs comes from the implicit submit below; for normal
+  // runs it comes from the user's manual submit. In both cases we wait for the
+  // submit response. Until then, hide the row.
+  showDifficulty(null);
+
   if (state.practice) {
     els.postNote().textContent = 'Practice complete — your updated weak spots will be ready next time you visit Practice.';
     const actions = els.scoreScreen().querySelector('.actions');
@@ -224,7 +229,9 @@ function finish(finalScore) {
     a2.textContent = 'Play normally';
     actions.appendChild(a1);
     actions.appendChild(a2);
-    api.submit(state.sessionId).catch(() => {});
+    api.submit(state.sessionId).then((r) => {
+      showDifficulty(r?.difficulty ?? null);
+    }).catch(() => {});
     return;
   }
 
@@ -258,6 +265,7 @@ function showSubmitModal() {
     try {
       const r = await api.submit(state.sessionId);
       els.postNote().textContent = `Submitted! You are #${r.rank}.`;
+      showDifficulty(r?.difficulty ?? null);
     } catch (ex) {
       if (ex.status === 401) {
         // Cookie expired between play and submit. Stash for one retry.
@@ -271,6 +279,18 @@ function showSubmitModal() {
     }
     close();
   });
+}
+
+function showDifficulty(d) {
+  const el = document.getElementById('run-difficulty');
+  if (!el) return;
+  if (d == null) {
+    el.classList.add('hidden');
+    return;
+  }
+  const tier = d <= 4 ? 'easy' : d <= 6 ? 'mid' : d <= 8 ? 'hard' : 'extreme';
+  el.className = `run-difficulty diff-${tier}`;
+  el.textContent = `Run difficulty: ${d.toFixed(1)} / 10`;
 }
 
 document.addEventListener('DOMContentLoaded', () => {

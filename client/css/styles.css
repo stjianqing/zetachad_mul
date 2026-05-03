@@ -984,3 +984,79 @@ button, a.secondary, .auth-form input, .leaderboard-table a {
   border-radius: 3px;
   z-index: 10;
 }
+
+/* Leaderboard difficulty column */
+.diff-cell {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+.diff-cell.diff-easy    { color: var(--lime); }
+.diff-cell.diff-mid     { color: var(--cyan); }
+.diff-cell.diff-hard    { color: var(--magenta); }
+.diff-cell.diff-extreme { color: var(--orange); }
+.diff-cell.diff-na      { color: var(--ink-faint); font-weight: 400; }
+
+.run-difficulty {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  margin: 0.5rem 0 0.75rem;
+}
+.run-difficulty.diff-easy    { color: var(--lime); }
+.run-difficulty.diff-mid     { color: var(--cyan); }
+.run-difficulty.diff-hard    { color: var(--magenta); }
+.run-difficulty.diff-extreme { color: var(--orange); }
+
+.board-caption {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+  margin: 0.75rem 0 0;
+  text-align: center;
+  font-style: italic;
+}
+
+.diff-math {
+  margin: 0.75rem auto 0;
+  max-width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-faint);
+}
+.diff-math summary {
+  cursor: pointer;
+  text-align: center;
+  letter-spacing: 0.04em;
+  padding: 0.25rem 0;
+  user-select: none;
+}
+.diff-math summary:hover {
+  color: var(--cyan);
+}
+.diff-math-body {
+  padding: 0.5rem 0.25rem 0;
+  line-height: 1.5;
+}
+.diff-math-body p {
+  margin: 0 0 0.75rem;
+}
+.diff-math-body p:last-child {
+  margin-bottom: 0;
+}
+.diff-math-body strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+.diff-math-body code {
+  font-family: var(--font-mono);
+  color: var(--cyan);
+  background: rgba(5, 217, 232, 0.08);
+  padding: 0.05rem 0.25rem;
+  border-radius: 2px;
+}

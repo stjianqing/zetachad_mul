@@ -17,7 +17,7 @@ export async function getPool() {
   return cachedPool;
 }
 
-export async function freshApp() {
+export async function freshApp({ nowFn } = {}) {
   const pool = await getPool();
   if (!pool) return null;
   await pool.query('TRUNCATE attempts, runs, auth_sessions, users, cluster_medians RESTART IDENTITY CASCADE');
@@ -29,7 +29,8 @@ export async function freshApp() {
     cookieSecret: TEST_COOKIE_SECRET,
     cookieSecure: false,
     sessionStore,
-    medianCache
+    medianCache,
+    nowFn
   });
   return { app, pool, sessionStore, medianCache };
 }

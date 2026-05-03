@@ -124,6 +124,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         userId: session.userId,
         score: session.score,
         durationMs: session.durationMs,
+        practice: session.practice === true,
         attempts
       };
     },

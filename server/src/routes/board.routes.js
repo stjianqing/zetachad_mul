@@ -13,6 +13,13 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
     }
 
     const finished = sessionStore.finish(session_id);
+
+    // Practice runs: don't flip submitted_to_leaderboard, don't compute rank.
+    // The runs row was already inserted with practice=true at time-up flush.
+    if (session.practice === true) {
+      return { ok: true, practice: true, run_id: session.runId };
+    }
+
     if (!finished.qualifies) {
       return reply.code(422).send({ error: 'not_eligible', qualifies: false });
     }

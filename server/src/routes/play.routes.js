@@ -62,8 +62,8 @@ export default async function playRoutes(fastify, { sessionStore, pool }) {
       client = await pool.connect();
       await client.query('BEGIN');
       const insRun = await client.query(
-        'INSERT INTO runs (user_id, score, duration_ms) VALUES ($1, $2, $3) RETURNING id',
-        [rec.userId, rec.score, rec.durationMs]
+        'INSERT INTO runs (user_id, score, duration_ms, practice) VALUES ($1, $2, $3, $4) RETURNING id',
+        [rec.userId, rec.score, rec.durationMs, rec.practice]
       );
       const runId = Number(insRun.rows[0].id);
       // Bulk insert attempts. Build the VALUES clause with placeholders.

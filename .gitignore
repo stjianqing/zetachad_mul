@@ -8,3 +8,5 @@ Thumbs.db
 coverage/
 .idea/
 .vscode/
+_archive/
+.superpowers/

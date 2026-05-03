@@ -262,6 +262,10 @@ TODAY'S DAILY LEADERBOARD
 
 If the user is not #1, the worship line tones down: `BEHOLD stjia · cleared in 1:43 · #12 today.` (Rotating set of date-seeded variations.)
 
+The op-summary table is built from data the client already has — every `/api/play/answer` response carries the grading result (`op`, `correct`, `time_ms` for the question). `play.js` accumulates these in memory during the run and renders the table at completion. No new endpoint needed for fetching attempts.
+
+The inline daily leaderboard on the score view is fetched fresh via `GET /api/leaderboard/daily` after the run completes (separate concerns from the run-completion payload, and the user's just-finished entry will be included since it's already persisted by then).
+
 ### Leaderboard page (`client/leaderboard.html`)
 
 Add tabs at the top: `[ ALL-TIME ]  [ TODAY'S DAILY ]`. Default tab is All-Time. Daily tab renders today's daily leaderboard (full list, not just top 5). Anchor `#daily` opens the page directly to the daily tab (used by landing-widget link).
@@ -419,7 +423,7 @@ Use existing `freshApp()` + `registerAndCookie()` fixtures.
 For test injectability:
 
 - `todaySgtDateString(now?)` accepts an optional `now`.
-- A `now` value plumbed through routes via DI (e.g., `freshApp({ now })` fixture extension). Implementation finds the cleanest seam.
+- The current "now" is plumbed through routes via DI — likely a function like `app.config.now()` that returns `new Date()` in production but a mutable test-controlled value in tests. The "Day rollover correctness" test needs to *change* `now` between session-start and session-completion calls within the same test, so a static `freshApp({ now })` value is insufficient. Implementation should expose a setter (e.g., `app.config.setNow(date)`) or use a closure-captured mutable reference. Implementation finds the cleanest seam.
 
 ---
 

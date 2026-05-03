@@ -1,6 +1,7 @@
 import { requireAuth } from '../auth.js';
+import { todaySgtDateString } from '../game/sgt-date.js';
 
-export default async function boardRoutes(fastify, { pool, sessionStore }) {
+export default async function boardRoutes(fastify, { pool, sessionStore, nowFn = () => new Date() }) {
   fastify.post('/api/leaderboard/submit', { preHandler: requireAuth }, async (req, reply) => {
     const { session_id } = req.body ?? {};
     if (typeof session_id !== 'string') return reply.code(400).send({ error: 'bad_request' });
@@ -125,5 +126,74 @@ export default async function boardRoutes(fastify, { pool, sessionStore }) {
       if (ops[r.op]) ops[r.op].push({ username: r.username, avgMs: r.avg_ms, n: r.n });
     }
     return ops;
+  });
+
+  fastify.get('/api/leaderboard/daily', async (req) => {
+    const today = todaySgtDateString(nowFn());
+    const date = typeof req.query?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+      ? req.query.date
+      : today;
+
+    const limit = Math.min(Number(req.query?.limit) || 100, 500);
+
+    const { rows } = await pool.query(
+      `SELECT u.username, r.duration_ms, r.played_at
+       FROM runs r
+       JOIN users u ON u.id = r.user_id
+       WHERE r.daily_gauntlet_date = $1 AND r.submitted_to_leaderboard = true
+       ORDER BY r.duration_ms ASC, r.played_at ASC
+       LIMIT $2`,
+      [date, limit]
+    );
+
+    return {
+      date,
+      entries: rows.map((r, i) => ({
+        rank: i + 1,
+        username: r.username,
+        time_ms: Number(r.duration_ms),
+        played_at: r.played_at.toISOString()
+      }))
+    };
+  });
+
+  fastify.get('/api/leaderboard/daily/me', { preHandler: requireAuth }, async (req) => {
+    const today = todaySgtDateString(nowFn());
+
+    const { rows } = await pool.query(
+      `SELECT duration_ms, played_at
+       FROM runs
+       WHERE user_id = $1 AND daily_gauntlet_date = $2 AND submitted_to_leaderboard = true
+       LIMIT 1`,
+      [req.user.id, today]
+    );
+
+    if (rows.length === 0) {
+      return { played: false };
+    }
+
+    const { duration_ms, played_at } = rows[0];
+
+    const rankRows = await pool.query(
+      `SELECT COUNT(*) + 1 AS rank
+       FROM runs
+       WHERE daily_gauntlet_date = $1
+         AND submitted_to_leaderboard = true
+         AND (duration_ms < $2 OR (duration_ms = $2 AND played_at < $3))`,
+      [today, duration_ms, played_at]
+    );
+
+    const totalRows = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM runs
+       WHERE daily_gauntlet_date = $1 AND submitted_to_leaderboard = true`,
+      [today]
+    );
+
+    return {
+      played: true,
+      time_ms: Number(duration_ms),
+      rank: Number(rankRows.rows[0].rank),
+      total_today: totalRows.rows[0].n
+    };
   });
 }

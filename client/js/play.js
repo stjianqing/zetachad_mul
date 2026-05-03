@@ -1,5 +1,37 @@
 import { api } from './api.js';
 
+const WORSHIP_FIRST = ["ALL HAIL", "BEHOLD", "KNEEL BEFORE", "PRAISE BE TO", "GLORY TO", "WITNESS"];
+const WORSHIP_OTHER = ["BEHOLD", "WITNESS", "PRESENTING", "ENTER"];
+const POST_DONE = [
+  "see you tomorrow.",
+  "today's run: locked.",
+  "the overlords have seen enough.",
+  "you've been counted.",
+  "go touch grass."
+];
+
+function todaySgtDateString() {
+  const now = new Date();
+  const sgtMs = now.getTime() + 8 * 60 * 60 * 1000;
+  return new Date(sgtMs).toISOString().slice(0, 10);
+}
+
+function dateStringToSeed(s) { return Number(s.replace(/-/g, '')); }
+function pickByDate(table, dateString) { return table[dateStringToSeed(dateString) % table.length]; }
+
+function formatTimeMs(ms) {
+  const totalS = Math.floor(ms / 1000);
+  const m = Math.floor(totalS / 60);
+  const s = totalS % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c]);
+}
+
 const els = {
   score: () => document.getElementById('score'),
   timer: () => document.getElementById('timer'),
@@ -11,13 +43,15 @@ const els = {
   finalScore: () => document.getElementById('final-score'),
   postNote: () => document.getElementById('post-note'),
   modalRoot: () => document.getElementById('modal-root'),
-  playAgain: () => document.getElementById('play-again')
+  playAgain: () => document.getElementById('play-again'),
+  modePill: () => document.getElementById('mode-pill')
 };
 
 const state = {
   sessionId: null,
   config: null,
-  mode: 'guest',  // 'user' | 'guest'
+  mode: 'guest',
+  dailyGauntlet: false,
   authedUser: null,
   isDefaultConfig: true,
   timeLimitMs: 0,
@@ -25,9 +59,11 @@ const state = {
   finished: false,
   finalScore: 0,
   currentAnswer: null,
-  peekQuestion: null,  // { prompt, op, answer } — pre-fetched next question for instant advance
+  peekQuestion: null,
   timerExpired: false,
-  practice: false
+  practice: false,
+  totalQuestions: null,
+  questionIndex: 0
 };
 
 function readPracticeSession() {
@@ -36,9 +72,7 @@ function readPracticeSession() {
     if (!raw) return null;
     sessionStorage.removeItem('zc_practice_session');
     return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 function isDefaultConfig(c) {
@@ -58,6 +92,13 @@ function isDefaultConfig(c) {
 function tickClock() {
   if (state.finished) return;
   const elapsed = performance.now() - state.startedAt;
+  if (state.dailyGauntlet) {
+    els.timer().textContent = formatTimeMs(elapsed);
+    const frac = state.questionIndex / state.totalQuestions;
+    els.bar().style.transform = `scaleX(${frac})`;
+    requestAnimationFrame(tickClock);
+    return;
+  }
   const remaining = Math.max(0, state.timeLimitMs - elapsed);
   els.timer().textContent = Math.ceil(remaining / 1000);
   els.bar().style.transform = `scaleX(${remaining / state.timeLimitMs})`;
@@ -73,16 +114,53 @@ function tickClock() {
 async function finalizeOnTimeout() {
   let r;
   try { r = await api.answer(state.sessionId, ''); }
-  catch (ex) {
-    // If the server is unreachable, still close the run with the last known score so the user isn't stuck.
-    finish(state.finalScore);
+  catch (ex) { finish({ final_score: state.finalScore }); return; }
+  if (r && r.time_up) finish(r);
+  else finish({ final_score: state.finalScore });
+}
+
+async function startDailyGauntlet() {
+  state.dailyGauntlet = true;
+  state.mode = 'user';
+  state.isDefaultConfig = true;
+
+  let r;
+  try { r = await api.startDailyGauntlet(); }
+  catch (e) {
+    if (e.status === 401) { location.href = 'register.html'; return; }
+    alert('Could not start daily gauntlet: ' + e.message);
+    location.href = 'index.html';
     return;
   }
-  if (r && r.time_up) finish(r.final_score);
-  else finish(state.finalScore);
+
+  if (r.already_completed) {
+    location.href = 'index.html';
+    return;
+  }
+
+  state.sessionId = r.session_id;
+  state.totalQuestions = r.total_questions;
+  state.questionIndex = r.question_index;
+  state.timeLimitMs = null;
+  state.startedAt = performance.now();
+
+  els.modePill().classList.remove('hidden');
+  els.prompt().textContent = r.question.prompt;
+  els.timer().textContent = '0:00';
+  els.score().textContent = `${state.questionIndex} / ${state.totalQuestions}`;
+  state.currentAnswer = r.question.answer;
+  state.peekQuestion = r.peek_question;
+  requestAnimationFrame(tickClock);
 }
 
 async function start() {
+  const url = new URL(location.href);
+  if (url.searchParams.get('mode') === 'daily-gauntlet') {
+    try { state.authedUser = (await api.me()).user; } catch {}
+    if (!state.authedUser) { location.href = 'register.html'; return; }
+    return startDailyGauntlet();
+  }
+
   const practice = readPracticeSession();
   if (practice) {
     try { state.authedUser = (await api.me()).user; } catch { state.authedUser = null; }
@@ -124,28 +202,17 @@ async function start() {
   requestAnimationFrame(tickClock);
 }
 
-// Fast-path advance: when the user's input matches the current answer, swap
-// the prompt to the pre-fetched peek question synchronously (zero perceived
-// latency) and POST the answer to the server in the background. The server's
-// response refreshes the peek for the question after this one.
-//
-// Falls back to a synchronous round-trip if the peek isn't ready yet (rare —
-// would require the user to solve faster than one network round-trip).
 function submitCorrectAnswer(value) {
   if (state.peekQuestion == null) {
-    // Peek hasn't arrived yet (the previous server response is still in flight).
-    // Fall back to the awaited path so we don't lose the answer.
     return submitAnswerAwaited(value);
   }
-  // Synchronous swap: advance the displayed question to the peek.
   const advancedTo = state.peekQuestion;
   state.currentAnswer = advancedTo.answer;
-  state.peekQuestion = null;  // marked in-flight; refilled when server responds
+  state.peekQuestion = null;
   els.input().value = '';
   els.prompt().textContent = advancedTo.prompt;
   els.input().classList.add('correct');
   setTimeout(() => els.input().classList.remove('correct'), 220);
-  // Background POST: brings back authoritative score + the next peek.
   postAnswer(value);
 }
 
@@ -154,21 +221,19 @@ async function postAnswer(value) {
   try { r = await api.answer(state.sessionId, value); }
   catch (ex) {
     if (ex.status === 404) { alert('Server hiccuped — please start a new run.'); location.href = 'index.html'; return; }
-    // Network blip — the user has already advanced locally; we'll catch up on
-    // the next answer or at finalize. Don't block UI.
     return;
   }
-  if (r.time_up) return finish(r.final_score);
-  els.score().textContent = r.score;
-  state.finalScore = r.score;
-  // The server's `next_question` is what we already advanced to (the prior
-  // peek). The new `peek_question` is what comes AFTER that — store it for
-  // the next advance.
+  if (r.time_up) return finish(r);
+  if (state.dailyGauntlet && typeof r.question_index === 'number') {
+    state.questionIndex = r.question_index;
+    els.score().textContent = `${state.questionIndex} / ${state.totalQuestions}`;
+  } else {
+    els.score().textContent = r.score;
+    state.finalScore = r.score;
+  }
   state.peekQuestion = r.peek_question;
 }
 
-// Awaited path used only when the peek isn't ready (degrades to pre-buffered
-// behavior: ~1 round-trip of perceived latency).
 async function submitAnswerAwaited(value) {
   if (state.finished || state.timerExpired) return;
   els.input().value = '';
@@ -178,9 +243,14 @@ async function submitAnswerAwaited(value) {
     if (ex.status === 404) { alert('Server hiccuped — please start a new run.'); location.href = 'index.html'; return; }
     return;
   }
-  if (r.time_up) return finish(r.final_score);
-  els.score().textContent = r.score;
-  state.finalScore = r.score;
+  if (r.time_up) return finish(r);
+  if (state.dailyGauntlet && typeof r.question_index === 'number') {
+    state.questionIndex = r.question_index;
+    els.score().textContent = `${state.questionIndex} / ${state.totalQuestions}`;
+  } else {
+    els.score().textContent = r.score;
+    state.finalScore = r.score;
+  }
   els.prompt().textContent = r.next_question.prompt;
   state.currentAnswer = r.next_question.answer;
   state.peekQuestion = r.peek_question;
@@ -199,16 +269,21 @@ function onInput() {
   submitCorrectAnswer(value);
 }
 
-function finish(finalScore) {
+async function finish(payload) {
   state.finished = true;
-  state.finalScore = finalScore;
-  els.finalScore().textContent = finalScore;
-  // Hide drill UI, show score screen.
   document.body.classList.remove('drilling');
   els.form().classList.add('hidden');
   document.querySelector('.drill-bar').classList.add('hidden');
   document.querySelector('.time-bar').classList.add('hidden');
   els.scoreScreen().classList.remove('hidden');
+
+  if (state.dailyGauntlet && payload.daily_gauntlet) {
+    await renderDailyGauntletScoreView(payload);
+    return;
+  }
+
+  state.finalScore = payload.final_score ?? state.finalScore;
+  els.finalScore().textContent = state.finalScore;
 
   // Difficulty for practice runs comes from the implicit submit below; for normal
   // runs it comes from the user's manual submit. In both cases we wait for the
@@ -246,6 +321,52 @@ function finish(finalScore) {
   els.playAgain().addEventListener('click', () => { location.href = 'index.html'; });
 }
 
+async function renderDailyGauntletScoreView(payload) {
+  const today = todaySgtDateString();
+  const username = state.authedUser?.username ?? 'you';
+
+  const screen = els.scoreScreen();
+
+  const verb = payload.rank === 1
+    ? pickByDate(WORSHIP_FIRST, today)
+    : pickByDate(WORSHIP_OTHER, today);
+  const subtitle = payload.rank === 1
+    ? `today's arithmetic overlord · cleared in ${formatTimeMs(payload.time_ms)}`
+    : `cleared in ${formatTimeMs(payload.time_ms)} · #${payload.rank} today`;
+
+  screen.innerHTML = `
+    <h1 class="daily-finish-headline">${escapeHtml(verb)} ${escapeHtml(username)}</h1>
+    <p class="daily-finish-sub">${escapeHtml(subtitle)}</p>
+    <div class="daily-finish-time">[ ${formatTimeMs(payload.time_ms)} ]</div>
+    <h2>TODAY'S DAILY LEADERBOARD</h2>
+    <ol class="daily-board-list" id="score-daily-board"><li class="dim">Loading…</li></ol>
+    <div class="actions">
+      <a class="secondary" href="index.html">← Back to drill</a>
+      <a class="primary" href="leaderboard.html#daily">View all rankings →</a>
+    </div>
+  `;
+
+  let board;
+  try { board = await api.dailyBoard(); }
+  catch { document.getElementById('score-daily-board').innerHTML = '<li class="dim">Could not load leaderboard.</li>'; return; }
+
+  const list = document.getElementById('score-daily-board');
+  const items = board.entries.slice(0, 5).map((e, i) => {
+    if (i === 0) {
+      const v = pickByDate(WORSHIP_FIRST, today);
+      return `<li class="overlord">${v} <strong>${escapeHtml(e.username)}</strong> · today's arithmetic overlord · ${formatTimeMs(e.time_ms)}</li>`;
+    }
+    const isYou = e.username === username;
+    return `<li${isYou ? ' class="you"' : ''}>${i + 1}. ${escapeHtml(e.username)} <span class="dim">·</span> ${formatTimeMs(e.time_ms)}</li>`;
+  });
+
+  if (payload.rank > 5) {
+    items.push(`<li class="you">${payload.rank}. you <span class="dim">·</span> ${formatTimeMs(payload.time_ms)}</li>`);
+  }
+
+  list.innerHTML = items.join('');
+}
+
 function showSubmitModal() {
   const root = els.modalRoot();
   root.innerHTML = `
@@ -268,7 +389,6 @@ function showSubmitModal() {
       showDifficulty(r?.difficulty ?? null);
     } catch (ex) {
       if (ex.status === 401) {
-        // Cookie expired between play and submit. Stash for one retry.
         localStorage.setItem('zc_pending_submit', state.sessionId);
         els.postNote().textContent = 'You got logged out — log back in to submit.';
       } else if (ex.status === 422) {

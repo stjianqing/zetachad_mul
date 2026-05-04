@@ -395,10 +395,7 @@ async function finish(payload) {
   state.finalScore = payload.final_score ?? state.finalScore;
   els.finalScore().textContent = state.finalScore;
 
-  // Difficulty for practice runs comes from the implicit submit below; for normal
-  // runs it comes from the user's manual submit. In both cases we wait for the
-  // submit response. Until then, hide the row.
-  showDifficulty(null);
+  showDifficulty(payload.difficulty ?? null);
 
   if (state.practice) {
     els.postNote().textContent = 'Practice complete — your updated weak spots will be ready next time you visit Practice.';

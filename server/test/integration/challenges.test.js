@@ -784,3 +784,36 @@ test('redeem: challenger redeeming own share link → 400', async (t) => {
   assert.equal(r.statusCode, 400);
   assert.equal(r.json().error, 'cannot_redeem_own_share');
 });
+
+test('play/start with mode=challenge: returns session with same seed as challenger', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const challengerSeed = Number(seedRow.rows[0].seed);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: '/api/play/start',
+    payload: { mode: 'challenge', challenge_id: challengeId },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.challenge_id, challengeId);
+  const sess = sessionStore.get(body.session_id);
+  assert.equal(sess.seed, challengerSeed);
+});

@@ -33,13 +33,13 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
   }
 
   return {
-    start({ userId, config, practice = false, weighting = null, mode = 'normal', seedDate = null }) {
+    start({ userId, config, practice = false, weighting = null, mode = 'normal', seedDate = null, explicitSeed = null }) {
       const sessionId = makeId();
       const startedAt = now();
       const isDailyGauntlet = mode === 'daily-gauntlet';
       const seed = isDailyGauntlet
         ? dateStringToSeed(seedDate)
-        : nextSeed();
+        : (explicitSeed != null ? (explicitSeed | 0) : nextSeed());
       const rng = makeRng(seed);
       const session = {
         id: sessionId,

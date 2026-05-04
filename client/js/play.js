@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { createGhostTicker } from './ghost-ticker.js';
 
 const WORSHIP_FIRST = ["ALL HAIL", "BEHOLD", "KNEEL BEFORE", "PRAISE BE TO", "GLORY TO", "WITNESS"];
 const WORSHIP_OTHER = ["BEHOLD", "WITNESS", "PRESENTING", "ENTER"];
@@ -32,6 +33,9 @@ function escapeHtml(s) {
   })[c]);
 }
 
+const params = new URLSearchParams(location.search);
+const challengeId = params.has('challenge') ? Number(params.get('challenge')) : null;
+
 const els = {
   score: () => document.getElementById('score'),
   timer: () => document.getElementById('timer'),
@@ -63,7 +67,10 @@ const state = {
   timerExpired: false,
   practice: false,
   totalQuestions: null,
-  questionIndex: 0
+  questionIndex: 0,
+  isChallenge: false,
+  challengeId: null,
+  ghostTicker: null
 };
 
 function readPracticeSession() {
@@ -153,7 +160,73 @@ async function startDailyGauntlet() {
   requestAnimationFrame(tickClock);
 }
 
+async function startChallenge(id) {
+  // Verify auth, then accept the challenge to get the ghost data + seed.
+  try { state.authedUser = (await api.me()).user; } catch { state.authedUser = null; }
+  if (!state.authedUser) {
+    location.href = `register.html?next=${encodeURIComponent(location.pathname + location.search)}`;
+    return;
+  }
+
+  let acceptPayload;
+  try {
+    acceptPayload = await api.challenges.accept(id);
+  } catch (e) {
+    if (e.status === 404) {
+      // Already accepted/declined/etc. — bounce to result page.
+      location.href = `result.html?id=${id}`;
+      return;
+    }
+    alert('Could not accept challenge: ' + e.message);
+    location.href = 'index.html';
+    return;
+  }
+
+  let startRes;
+  try { startRes = await api.startChallenge(id); }
+  catch (e) {
+    alert('Could not start challenge: ' + e.message);
+    location.href = 'index.html';
+    return;
+  }
+
+  state.isChallenge = true;
+  state.challengeId = id;
+  state.mode = 'user';
+  state.isDefaultConfig = true;
+  state.sessionId = startRes.session_id;
+  state.timeLimitMs = startRes.time_limit_ms;
+  state.currentAnswer = startRes.question.answer;
+  state.peekQuestion = startRes.peek_question;
+  state.startedAt = performance.now();
+
+  els.prompt().textContent = startRes.question.prompt;
+  els.timer().textContent = Math.ceil(startRes.time_limit_ms / 1000);
+
+  // Set up ghost ticker.
+  const ghostRow = document.getElementById('ghost-row');
+  ghostRow.hidden = false;
+  const ghostScoreEl = document.getElementById('ghost-score');
+  const ghostDiffEl = document.getElementById('ghost-diff');
+  state.ghostTicker = createGhostTicker({
+    attempts: acceptPayload.challenger_attempts,
+    getElapsedMs: () => performance.now() - state.startedAt,
+    onUpdate({ ghostScore, recipientScore, diff }) {
+      ghostScoreEl.textContent = String(ghostScore);
+      ghostDiffEl.textContent = diff > 0 ? `+${diff}` : String(diff);
+      ghostDiffEl.classList.toggle('ahead', diff > 0);
+      ghostDiffEl.classList.toggle('behind', diff < 0);
+    }
+  });
+  state.ghostTicker.start();
+  requestAnimationFrame(tickClock);
+}
+
 async function start() {
+  if (challengeId !== null) {
+    return startChallenge(challengeId);
+  }
+
   const url = new URL(location.href);
   if (url.searchParams.get('mode') === 'daily-gauntlet') {
     try { state.authedUser = (await api.me()).user; } catch {}
@@ -230,6 +303,9 @@ async function postAnswer(value) {
   } else {
     els.score().textContent = r.score;
     state.finalScore = r.score;
+    if (state.isChallenge && state.ghostTicker) {
+      state.ghostTicker.tick(state.finalScore);
+    }
   }
   state.peekQuestion = r.peek_question;
 }
@@ -250,6 +326,9 @@ async function submitAnswerAwaited(value) {
   } else {
     els.score().textContent = r.score;
     state.finalScore = r.score;
+    if (state.isChallenge && state.ghostTicker) {
+      state.ghostTicker.tick(state.finalScore);
+    }
   }
   els.prompt().textContent = r.next_question.prompt;
   state.currentAnswer = r.next_question.answer;
@@ -276,6 +355,19 @@ async function finish(payload) {
   document.querySelector('.drill-bar').classList.add('hidden');
   document.querySelector('.time-bar').classList.add('hidden');
   els.scoreScreen().classList.remove('hidden');
+
+  if (state.isChallenge) {
+    state.ghostTicker?.stop();
+    if (payload.run_id != null) {
+      api.challenges.submitRun(state.challengeId, payload.run_id)
+        .catch(err => console.error('submitRun failed', err))
+        .finally(() => { location.href = `result.html?id=${state.challengeId}`; });
+      return;
+    }
+    // No run_id — something went wrong. Bounce home.
+    location.href = 'index.html';
+    return;
+  }
 
   if (state.dailyGauntlet && payload.daily_gauntlet) {
     await renderDailyGauntletScoreView(payload);

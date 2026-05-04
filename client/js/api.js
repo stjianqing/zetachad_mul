@@ -26,6 +26,7 @@ export const api = {
   logout:    () => request('POST', '/logout'),
   startPlay: (config) => request('POST', '/play/start',  { config }),
   startDailyGauntlet: () => request('POST', '/play/start', { mode: 'daily-gauntlet' }),
+  startChallenge: (challengeId) => request('POST', '/play/start', { mode: 'challenge', challenge_id: challengeId }),
   answer:    (session_id, answer) => request('POST', '/play/answer', { session_id, answer }),
   submit:    (session_id) => request('POST', '/leaderboard/submit', { session_id }),
   board:     () => request('GET',  '/leaderboard'),

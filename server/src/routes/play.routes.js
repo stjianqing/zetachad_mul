@@ -13,6 +13,37 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
   fastify.post('/api/play/start', async (req, reply) => {
     const mode = req.body?.mode;
 
+    if (mode === 'challenge') {
+      if (!req.user) return reply.code(401).send({ error: 'register-to-play' });
+      const challengeId = Number(req.body?.challenge_id);
+      if (!Number.isInteger(challengeId)) {
+        return reply.code(400).send({ error: 'invalid_challenge_id' });
+      }
+      const c = await pool.query(
+        `SELECT c.id, c.recipient_id, cr.seed
+         FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id
+         WHERE c.id=$1 AND c.status='accepted'`,
+        [challengeId]
+      );
+      if (c.rowCount === 0) return reply.code(409).send({ error: 'challenge_not_accepted' });
+      if (Number(c.rows[0].recipient_id) !== req.user.id) {
+        return reply.code(403).send({ error: 'not_recipient' });
+      }
+      const seed = Number(c.rows[0].seed);
+      const r = sessionStore.start({
+        userId: req.user.id,
+        config: DEFAULT_CONFIG,
+        explicitSeed: seed
+      });
+      return {
+        session_id: r.sessionId,
+        question: { prompt: r.question.prompt, op: r.question.op, answer: r.question.answer },
+        peek_question: { prompt: r.peekQuestion.prompt, op: r.peekQuestion.op, answer: r.peekQuestion.answer },
+        time_limit_ms: r.timeLimitMs,
+        challenge_id: challengeId
+      };
+    }
+
     if (mode === 'daily-gauntlet') {
       if (!req.user) {
         return reply.code(401).send({ error: 'register-to-play' });
@@ -98,7 +129,8 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
           total_today: totalRow.rows[0].n
         };
       }
-      return { time_up: true, final_score: r.finalScore };
+      const live = sessionStore.get(session_id);
+      return { time_up: true, final_score: r.finalScore, run_id: live?.runId ?? null };
     }
     return {
       correct: r.correct,

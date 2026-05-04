@@ -445,6 +445,11 @@ function maybeShowChallengeBlock() {
   if (!block) return;
   block.hidden = false;
 
+  const explainer = document.getElementById('challenge-explainer');
+  if (explainer) {
+    explainer.innerHTML = `Same questions. Your <strong>${state.finalScore}</strong> to beat. They get a notification next time they log in.`;
+  }
+
   if (rematchTarget) {
     const usernameInput = document.getElementById('challenge-username');
     if (usernameInput) usernameInput.value = rematchTarget;

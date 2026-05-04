@@ -65,4 +65,50 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
       share_url: `${baseUrl}/challenge/${token}`
     };
   });
+
+  fastify.get('/api/challenges/incoming', { preHandler: requireAuth }, async (req) => {
+    const { rows } = await pool.query(
+      `SELECT c.id, c.created_at, c.status,
+              r.score AS challenger_score,
+              u.username AS challenger_username
+       FROM challenges c
+       JOIN runs r ON r.id = c.challenger_run_id
+       JOIN users u ON u.id = c.challenger_id
+       WHERE c.recipient_id = $1 AND c.status = 'pending'
+       ORDER BY c.created_at ASC`,
+      [req.user.id]
+    );
+    return rows.map(row => ({
+      id: Number(row.id),
+      challenger: { username: row.challenger_username },
+      challenger_score: row.challenger_score,
+      created_at: row.created_at
+    }));
+  });
+
+  fastify.get('/api/challenges/outgoing', { preHandler: requireAuth }, async (req) => {
+    const { rows } = await pool.query(
+      `SELECT c.id, c.created_at, c.status, c.share_token, c.challenger_seen_result,
+              cr.score AS challenger_score,
+              rr.score AS recipient_score,
+              ru.username AS recipient_username
+       FROM challenges c
+       JOIN runs cr ON cr.id = c.challenger_run_id
+       LEFT JOIN runs rr ON rr.id = c.recipient_run_id
+       LEFT JOIN users ru ON ru.id = c.recipient_id
+       WHERE c.challenger_id = $1
+       ORDER BY c.created_at DESC`,
+      [req.user.id]
+    );
+    return rows.map(row => ({
+      id: Number(row.id),
+      recipient_username: row.recipient_username ?? null,
+      share_token: row.share_token ?? null,
+      challenger_score: row.challenger_score,
+      recipient_score: row.recipient_score ?? null,
+      status: row.status,
+      challenger_seen_result: row.challenger_seen_result,
+      created_at: row.created_at
+    }));
+  });
 }

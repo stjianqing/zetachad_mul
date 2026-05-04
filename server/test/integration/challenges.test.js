@@ -207,3 +207,61 @@ test('create challenge: daily-gauntlet run blocked', async (t) => {
   });
   assert.equal(r.statusCode, 400);
 });
+
+test('incoming: only pending challenges for me', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  await playAndFinishStandardRun(app, alice.cookie, sessionStore);
+  const runId = await getLatestRunId(pool, alice.userId);
+
+  await app.inject({
+    method: 'POST',
+    url: '/api/challenges',
+    payload: { challenger_run_id: runId, recipient_username: 'bob' },
+    headers: { cookie: alice.cookie }
+  });
+
+  const r = await app.inject({
+    method: 'GET',
+    url: '/api/challenges/incoming',
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.length, 1);
+  assert.equal(body[0].challenger.username, 'alice');
+  assert.equal(typeof body[0].challenger_score, 'number');
+});
+
+test('outgoing: lists my sent challenges with status', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  await registerAndCookie(app, 'bob');
+  await playAndFinishStandardRun(app, alice.cookie, sessionStore);
+  const runId = await getLatestRunId(pool, alice.userId);
+
+  await app.inject({
+    method: 'POST',
+    url: '/api/challenges',
+    payload: { challenger_run_id: runId, recipient_username: 'bob' },
+    headers: { cookie: alice.cookie }
+  });
+
+  const r = await app.inject({
+    method: 'GET',
+    url: '/api/challenges/outgoing',
+    headers: { cookie: alice.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.length, 1);
+  assert.equal(body[0].recipient_username, 'bob');
+  assert.equal(body[0].status, 'pending');
+});

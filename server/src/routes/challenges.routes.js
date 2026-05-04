@@ -111,4 +111,55 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
       created_at: row.created_at
     }));
   });
+
+  fastify.post('/api/challenges/:id/accept', { preHandler: requireAuth }, async (req, reply) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'invalid_id' });
+
+    const upd = await pool.query(
+      `UPDATE challenges
+       SET status='accepted', responded_at=now()
+       WHERE id=$1 AND recipient_id=$2 AND status='pending'
+       RETURNING challenger_run_id`,
+      [id, req.user.id]
+    );
+    if (upd.rowCount === 0) {
+      return reply.code(404).send({ error: 'not_found_or_not_recipient' });
+    }
+    const challengerRunId = Number(upd.rows[0].challenger_run_id);
+
+    const runRes = await pool.query('SELECT seed FROM runs WHERE id=$1', [challengerRunId]);
+    const seed = runRes.rows[0].seed;
+
+    const attRes = await pool.query(
+      `SELECT q_index, response_ms, correct FROM attempts WHERE run_id=$1 ORDER BY q_index ASC`,
+      [challengerRunId]
+    );
+    const challenger_attempts = attRes.rows.map(a => ({
+      q_index: a.q_index,
+      response_ms: a.response_ms,
+      correct: a.correct
+    }));
+
+    return {
+      seed: Number(seed),
+      config: DEFAULT_CONFIG,
+      challenger_attempts
+    };
+  });
+
+  fastify.post('/api/challenges/:id/decline', { preHandler: requireAuth }, async (req, reply) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'invalid_id' });
+    const upd = await pool.query(
+      `UPDATE challenges
+       SET status='declined', responded_at=now()
+       WHERE id=$1 AND recipient_id=$2 AND status='pending'`,
+      [id, req.user.id]
+    );
+    if (upd.rowCount === 0) {
+      return reply.code(404).send({ error: 'not_found_or_not_recipient' });
+    }
+    return { ok: true };
+  });
 }

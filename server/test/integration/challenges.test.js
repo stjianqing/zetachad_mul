@@ -265,3 +265,84 @@ test('outgoing: lists my sent challenges with status', async (t) => {
   assert.equal(body[0].recipient_username, 'bob');
   assert.equal(body[0].status, 'pending');
 });
+
+async function createUsernameChallenge(app, pool, sessionStore, alice, recipientUsername) {
+  await playAndFinishStandardRun(app, alice.cookie, sessionStore);
+  const runId = await getLatestRunId(pool, alice.userId);
+  const r = await app.inject({
+    method: 'POST',
+    url: '/api/challenges',
+    payload: { challenger_run_id: runId, recipient_username: recipientUsername },
+    headers: { cookie: alice.cookie }
+  });
+  return r.json().id;
+}
+
+test('accept: returns seed + config + challenger_attempts', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.ok(typeof body.seed === 'number');
+  assert.ok(body.config);
+  assert.ok(Array.isArray(body.challenger_attempts));
+  if (body.challenger_attempts.length > 0) {
+    assert.ok('q_index' in body.challenger_attempts[0]);
+    assert.ok('response_ms' in body.challenger_attempts[0]);
+    assert.ok('correct' in body.challenger_attempts[0]);
+  }
+});
+
+test('accept: not the recipient → 404', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  await registerAndCookie(app, 'bob');
+  const eve = await registerAndCookie(app, 'eve');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: eve.cookie }
+  });
+  assert.equal(r.statusCode, 404);
+});
+
+test('decline: status flips and shows up on outgoing', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/decline`,
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+
+  const out = await app.inject({
+    method: 'GET',
+    url: '/api/challenges/outgoing',
+    headers: { cookie: alice.cookie }
+  });
+  const list = out.json();
+  assert.equal(list[0].status, 'declined');
+});

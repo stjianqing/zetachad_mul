@@ -139,3 +139,71 @@ test('create challenge: not the run owner (400)', async (t) => {
   });
   assert.equal(r.statusCode, 400);
 });
+
+test('create challenge: legacy run (no seed) blocked', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  await registerAndCookie(app, 'derpy');
+  const ins = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice) VALUES ($1, 10, 120000, false) RETURNING id`,
+    [alice.userId]
+  );
+  const runId = Number(ins.rows[0].id);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: '/api/challenges',
+    payload: { challenger_run_id: runId, recipient_username: 'derpy' },
+    headers: { cookie: alice.cookie }
+  });
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.json().error, 'ineligible_run');
+});
+
+test('create challenge: practice run blocked', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  await registerAndCookie(app, 'derpy');
+  const ins = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed) VALUES ($1, 10, 120000, true, 42) RETURNING id`,
+    [alice.userId]
+  );
+  const runId = Number(ins.rows[0].id);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: '/api/challenges',
+    payload: { challenger_run_id: runId, recipient_username: 'derpy' },
+    headers: { cookie: alice.cookie }
+  });
+  assert.equal(r.statusCode, 400);
+});
+
+test('create challenge: daily-gauntlet run blocked', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  await registerAndCookie(app, 'derpy');
+  const ins = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed, daily_gauntlet_date, submitted_to_leaderboard)
+     VALUES ($1, 60, 240000, false, 20260504, '2026-05-04', true) RETURNING id`,
+    [alice.userId]
+  );
+  const runId = Number(ins.rows[0].id);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: '/api/challenges',
+    payload: { challenger_run_id: runId, recipient_username: 'derpy' },
+    headers: { cookie: alice.cookie }
+  });
+  assert.equal(r.statusCode, 400);
+});

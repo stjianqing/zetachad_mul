@@ -293,3 +293,21 @@ test('submit flips submitted_to_leaderboard; unsubmitted runs do not appear on l
   assert.equal(lbAfter.json().entries.length, 1);
   assert.equal(lbAfter.json().entries[0].username, 'alice');
 });
+
+test('time-up payload on guest run includes difficulty:null', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+
+  const cfg = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  cfg.durationMs = 50;
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: cfg } });
+  const { session_id } = start.json();
+
+  await new Promise(r => setTimeout(r, 80));
+  const tu = await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' } });
+
+  assert.equal(tu.statusCode, 200);
+  assert.equal(tu.json().time_up, true);
+  assert.equal(tu.json().difficulty, null);
+});

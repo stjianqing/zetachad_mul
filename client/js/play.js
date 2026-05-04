@@ -202,6 +202,11 @@ async function startChallenge(id) {
     return;
   }
 
+  if (startRes.already_started) {
+    location.href = 'index.html?forfeit=1';
+    return;
+  }
+
   state.isChallenge = true;
   state.challengeId = id;
   state.mode = 'user';

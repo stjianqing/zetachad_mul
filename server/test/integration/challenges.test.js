@@ -43,6 +43,23 @@ async function getLatestRunId(pool, userId) {
   return Number(r.rows[0].id);
 }
 
+async function acceptChallenge(app, cookie, challengeId) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie }
+  });
+}
+
+async function startChallenge(app, cookie, challengeId) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/play/start',
+    payload: { mode: 'challenge', challenge_id: challengeId },
+    headers: { cookie }
+  });
+}
+
 test('create challenge by username — happy path', async (t) => {
   if (skipIfNoDb(t)) return;
   const { app, pool, sessionStore } = await freshApp();
@@ -816,4 +833,239 @@ test('play/start with mode=challenge: returns session with same seed as challeng
   assert.equal(body.challenge_id, challengeId);
   const sess = sessionStore.get(body.session_id);
   assert.equal(sess.seed, challengerSeed);
+});
+
+test('challenge lock: first /start sets recipient_started_at', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  const before = await pool.query(
+    'SELECT recipient_started_at FROM challenges WHERE id=$1', [challengeId]
+  );
+  assert.equal(before.rows[0].recipient_started_at, null);
+
+  const r = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(r.statusCode, 200);
+  assert.ok(r.json().session_id);
+
+  const after = await pool.query(
+    'SELECT recipient_started_at FROM challenges WHERE id=$1', [challengeId]
+  );
+  assert.ok(after.rows[0].recipient_started_at, 'recipient_started_at should be set after first /start');
+});
+
+test('challenge lock: second /start while lock held returns already_started', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  const first = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(first.statusCode, 200);
+  assert.ok(first.json().session_id);
+
+  const second = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(second.statusCode, 200);
+  const body = second.json();
+  assert.equal(body.already_started, true);
+  assert.equal(body.session_id, undefined, 'no session should be created on the second call');
+});
+
+test('challenge lock: race-recovery — pre-set recipient_started_at returns already_started', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  // Simulate "another tab won the race" by directly setting recipient_started_at.
+  await pool.query(
+    'UPDATE challenges SET recipient_started_at = now() WHERE id = $1',
+    [challengeId]
+  );
+
+  const r = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().already_started, true);
+});
+
+test('challenge lock: /start as non-recipient returns 403', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const carol = await registerAndCookie(app, 'carol');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  const r = await startChallenge(app, carol.cookie, challengeId);
+  assert.equal(r.statusCode, 403);
+  assert.equal(r.json().error, 'not_recipient');
+});
+
+test('challenge lock: /start when status is not accepted returns 409', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  // Manually move status away from 'accepted' to simulate forfeited or completed.
+  await pool.query("UPDATE challenges SET status='declined' WHERE id=$1", [challengeId]);
+
+  const r = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(r.statusCode, 409);
+  assert.equal(r.json().error, 'challenge_not_accepted');
+});
+
+test('challenge lock: /start for unknown challenge returns 404', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+
+  const bob = await registerAndCookie(app, 'bob');
+  const r = await startChallenge(app, bob.cookie, 999999);
+  assert.equal(r.statusCode, 404);
+  assert.equal(r.json().error, 'not_found');
+});
+
+test('forfeit sweep: uses recipient_started_at when set (start at t-31min → forfeited)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  await startChallenge(app, bob.cookie, challengeId);
+
+  // Backdate recipient_started_at to 31 minutes ago. responded_at stays recent.
+  await pool.query(
+    `UPDATE challenges SET recipient_started_at = now() - interval '31 minutes' WHERE id=$1`,
+    [challengeId]
+  );
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 1);
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'forfeited');
+});
+
+test('forfeit sweep: uses recipient_started_at when set (start at t-25min → not forfeited)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  await startChallenge(app, bob.cookie, challengeId);
+
+  // Backdate responded_at to 31 minutes ago, but recipient_started_at is recent (just now).
+  // The COALESCE should pick recipient_started_at and decline to forfeit.
+  await pool.query(
+    `UPDATE challenges SET responded_at = now() - interval '31 minutes' WHERE id=$1`,
+    [challengeId]
+  );
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 0);
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'accepted');
+});
+
+test('forfeit sweep: uses responded_at when never started (responded_at at t-31min → forfeited)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  // Don't call /start. recipient_started_at stays NULL.
+
+  await pool.query(
+    `UPDATE challenges SET responded_at = now() - interval '31 minutes' WHERE id=$1`,
+    [challengeId]
+  );
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 1);
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'forfeited');
+});
+
+test('challenge lock: completing a run preserves recipient_started_at', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  await startChallenge(app, bob.cookie, challengeId);
+
+  // Capture recipient_started_at after /start.
+  const lockRow = await pool.query(
+    'SELECT recipient_started_at FROM challenges WHERE id=$1', [challengeId]
+  );
+  const startedAt = lockRow.rows[0].recipient_started_at;
+  assert.ok(startedAt, 'recipient_started_at should be set by /start');
+
+  // Insert a recipient run with the right seed (mirroring the submit-run test pattern).
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const expectedSeed = Number(seedRow.rows[0].seed);
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed)
+     VALUES ($1, 50, 120000, false, $2) RETURNING id`,
+    [bob.userId, expectedSeed]
+  );
+  const recipientRunId = Number(insRun.rows[0].id);
+
+  const submitRes = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: recipientRunId },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(submitRes.statusCode, 200);
+
+  // After submit, the row should be completed AND recipient_started_at must
+  // still match what /start set. Guards against accidental clearing of the column
+  // in the submit-run path.
+  const finalRow = await pool.query(
+    'SELECT status, recipient_run_id, recipient_started_at FROM challenges WHERE id=$1',
+    [challengeId]
+  );
+  assert.equal(finalRow.rows[0].status, 'completed');
+  assert.equal(Number(finalRow.rows[0].recipient_run_id), recipientRunId);
+  assert.equal(
+    finalRow.rows[0].recipient_started_at?.toISOString(),
+    startedAt.toISOString(),
+    'recipient_started_at must not change between /start and submit-run'
+  );
 });

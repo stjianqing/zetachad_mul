@@ -19,17 +19,50 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
       if (!Number.isInteger(challengeId)) {
         return reply.code(400).send({ error: 'invalid_challenge_id' });
       }
-      const c = await pool.query(
-        `SELECT c.id, c.recipient_id, cr.seed
-         FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id
-         WHERE c.id=$1 AND c.status='accepted'`,
-        [challengeId]
+
+      // Atomic claim: set recipient_started_at iff the caller is the recipient,
+      // status='accepted', and nobody has started yet. Returns the challenger's
+      // run id if we won the lock; rowCount=0 if we didn't.
+      const claim = await pool.query(
+        `UPDATE challenges
+         SET recipient_started_at = now()
+         WHERE id = $1
+           AND recipient_id = $2
+           AND status = 'accepted'
+           AND recipient_started_at IS NULL
+         RETURNING challenger_run_id`,
+        [challengeId, req.user.id]
       );
-      if (c.rowCount === 0) return reply.code(409).send({ error: 'challenge_not_accepted' });
-      if (Number(c.rows[0].recipient_id) !== req.user.id) {
-        return reply.code(403).send({ error: 'not_recipient' });
+
+      if (claim.rowCount === 0) {
+        // Diagnose why: load the row to distinguish not_found vs not_recipient
+        // vs not_accepted vs already_started.
+        const c = await pool.query(
+          `SELECT recipient_id, status, recipient_started_at
+           FROM challenges WHERE id = $1`,
+          [challengeId]
+        );
+        if (c.rowCount === 0) return reply.code(404).send({ error: 'not_found' });
+        const row = c.rows[0];
+        if (Number(row.recipient_id) !== req.user.id) {
+          return reply.code(403).send({ error: 'not_recipient' });
+        }
+        if (row.status !== 'accepted') {
+          return reply.code(409).send({ error: 'challenge_not_accepted' });
+        }
+        // status=accepted, recipient_id matches, but recipient_started_at is set → already started.
+        return { already_started: true };
       }
-      const seed = Number(c.rows[0].seed);
+
+      const challengerRunId = Number(claim.rows[0].challenger_run_id);
+      const seedRes = await pool.query('SELECT seed FROM runs WHERE id=$1', [challengerRunId]);
+      if (seedRes.rowCount === 0) {
+        // Should be impossible under FK constraints, but if it happens we'd rather
+        // surface a 500 than throw a bare TypeError on undefined.
+        req.log.error({ challengeId, challengerRunId }, 'challenge: challenger_run_id references missing runs row');
+        return reply.code(500).send({ error: 'internal_error' });
+      }
+      const seed = Number(seedRes.rows[0].seed);
       const r = sessionStore.start({
         userId: req.user.id,
         config: DEFAULT_CONFIG,

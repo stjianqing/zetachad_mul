@@ -48,7 +48,7 @@ function showForfeitToast() {
   const toast = document.createElement('div');
   toast.className = 'forfeit-toast';
   toast.setAttribute('role', 'status');
-  toast.textContent = 'Run already started — locked until tomorrow.';
+  toast.textContent = 'Run already started — locked.';
   document.body.appendChild(toast);
   setTimeout(() => {
     toast.classList.add('fade-out');

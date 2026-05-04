@@ -303,3 +303,39 @@ test('daily-gauntlet: finish UPDATEs the lock row in place', async (t) => {
   assert.equal(afterRows[0].score, 20);
   assert.equal(afterRows[0].submitted_to_leaderboard, true);
 });
+
+test('daily-gauntlet: re-/start while lock exists returns already_started', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const first = await startDaily(app, cookie);
+  assert.equal(first.statusCode, 200);
+  assert.ok(first.json().session_id);
+
+  // Don't answer anything — just /start again.
+  const second = await startDaily(app, cookie);
+  assert.equal(second.statusCode, 200);
+  const body = second.json();
+  assert.equal(body.already_started, true);
+  assert.equal(body.forfeited, true);
+  assert.equal(body.session_id, undefined, 'no session should be created on the second call');
+});
+
+test('daily-gauntlet: abandoned attempt locks the day (no second row inserted)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  await startDaily(app, cookie);
+  await startDaily(app, cookie);
+  await startDaily(app, cookie);
+
+  const { rows } = await pool.query(
+    'SELECT COUNT(*)::int AS n FROM runs WHERE user_id = (SELECT id FROM users WHERE username=$1)',
+    ['alice']
+  );
+  assert.equal(rows[0].n, 1, 'only one row total — repeated /start calls do not multiply');
+});

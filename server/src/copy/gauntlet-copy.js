@@ -16,7 +16,7 @@ export const PRE_TAUNTS = [
   "The overlords demand tribute.",
   "Glory or shame. Pick one.",
   "Today's questions don't care about your feelings.",
-  "Sixty problems. One you. Good luck.",
+  "Twenty problems. Don't waste them.",
   "Whatever you do, don't second-guess yourself.",
   "The leaderboard hungers."
 ];

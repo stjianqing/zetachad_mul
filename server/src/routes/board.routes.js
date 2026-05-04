@@ -161,18 +161,23 @@ export default async function boardRoutes(fastify, { pool, sessionStore, nowFn =
     const today = todaySgtDateString(nowFn());
 
     const { rows } = await pool.query(
-      `SELECT duration_ms, played_at
+      `SELECT duration_ms, played_at, submitted_to_leaderboard
        FROM runs
-       WHERE user_id = $1 AND daily_gauntlet_date = $2 AND submitted_to_leaderboard = true
+       WHERE user_id = $1 AND daily_gauntlet_date = $2
        LIMIT 1`,
       [req.user.id, today]
     );
 
     if (rows.length === 0) {
-      return { played: false };
+      return { played: false, forfeited: false };
     }
 
-    const { duration_ms, played_at } = rows[0];
+    const row = rows[0];
+    if (row.submitted_to_leaderboard !== true) {
+      return { played: false, forfeited: true };
+    }
+
+    const { duration_ms, played_at } = row;
 
     const rankRows = await pool.query(
       `SELECT COUNT(*) + 1 AS rank

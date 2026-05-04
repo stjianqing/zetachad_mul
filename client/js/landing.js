@@ -28,7 +28,7 @@ const PRE_TAUNTS = [
   "The overlords demand tribute.",
   "Glory or shame. Pick one.",
   "Today's questions don't care about your feelings.",
-  "Sixty problems. One you. Good luck.",
+  "Twenty problems. Don't waste them.",
   "Whatever you do, don't second-guess yourself.",
   "The leaderboard hungers."
 ];
@@ -42,6 +42,19 @@ const POST_DONE = [
 ];
 
 const WORSHIP_FIRST = ["ALL HAIL", "BEHOLD", "KNEEL BEFORE", "PRAISE BE TO", "GLORY TO", "WITNESS"];
+
+function showForfeitToast() {
+  if (document.querySelector('.forfeit-toast')) return;
+  const toast = document.createElement('div');
+  toast.className = 'forfeit-toast';
+  toast.setAttribute('role', 'status');
+  toast.textContent = 'Run already started — locked until tomorrow.';
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('fade-out');
+    setTimeout(() => toast.remove(), 400);
+  }, 4000);
+}
 
 function todaySgtDateString() {
   const now = new Date();
@@ -158,9 +171,18 @@ async function renderDailyHero(user) {
     return;
   }
 
+  if (me && me.forfeited) {
+    hero.dataset.state = 'forfeited';
+    titleEl.textContent = `FORFEITED — ${pickByDate(POST_DONE, today)}`;
+    subEl.textContent = 'One shot a day. You used yours.';
+    btn.textContent = '✗ LOCKED';
+    btn.disabled = true;
+    return;
+  }
+
   hero.dataset.state = 'ready';
   titleEl.textContent = `DAILY CHALLENGE — ${pickByDate(PRE_TAUNTS, today)}`;
-  subEl.textContent = '60 questions, 1 shot. Same drill worldwide today.';
+  subEl.textContent = '20 questions, 1 shot. Same drill worldwide today.';
   btn.textContent = 'START';
   btn.disabled = false;
   btn.addEventListener('click', () => { location.href = 'play.html?mode=daily-gauntlet'; });
@@ -202,6 +224,14 @@ async function renderDailyBoardWidget(user) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(location.search);
+  if (params.get('forfeit') === '1') {
+    showForfeitToast();
+    // Clean the URL so refresh doesn't re-show the toast.
+    const cleanUrl = location.pathname + location.hash;
+    history.replaceState({}, '', cleanUrl);
+  }
+
   document.querySelectorAll('.duration-card .quick-picks button').forEach((b) => {
     b.addEventListener('click', () => {
       document.querySelector('[name="duration"]').value = b.dataset.secs;

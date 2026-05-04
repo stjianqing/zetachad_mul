@@ -191,6 +191,37 @@ test('time-up on logged-in default-config run inserts runs + attempts in one tra
   assert.equal(Number(attempts.rows[0].run_id), Number(runs.rows[0].id));
 });
 
+test('time-up payload on logged-in default-config run includes difficulty', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG }, headers: { cookie } });
+  const { session_id } = start.json();
+
+  // Answer a few questions so flushRunIfRecording has attempts and computes a difficulty.
+  for (let i = 0; i < 3; i++) {
+    const cur = sessionStore.get(session_id).currentQuestion;
+    await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: String(cur.answer) }, headers: { cookie } });
+  }
+
+  // Force time-up so the next answer triggers the flush + response.
+  const sess = sessionStore.get(session_id);
+  sess.startedAt = Date.now() - sess.durationMs - 1;
+  const tu = await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
+
+  assert.equal(tu.statusCode, 200);
+  assert.equal(tu.json().time_up, true);
+  // Difficulty depends on the median cache being warm. In CI it may legitimately
+  // be null (no historical attempts). Either way, the field must be present and
+  // either a finite number or null — never undefined.
+  const body = tu.json();
+  assert.ok('difficulty' in body, 'response should include `difficulty` field');
+  const d = body.difficulty;
+  assert.ok(d === null || (typeof d === 'number' && Number.isFinite(d)), `difficulty was ${d}`);
+});
+
 test('time-up on guest run writes nothing', async (t) => {
   if (skipIfNoDb(t)) return;
   const { app, pool } = await freshApp();

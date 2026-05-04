@@ -55,6 +55,16 @@
           1.5s is roughly the fastest a human can read-and-type, so anything that fast scores 0. Around 7s is where puzzles start actually hurting, so that's the 10. Linear in between. Picked from eyeballing real attempt data, clamps to <code>[0, 10]</code> so weird clusters can't blow past the scale.</p>
         </div>
       </details>
+      <div class="chart-block" id="diff-bars-block">
+        <div class="chart-title">DIFFICULTY DISTRIBUTION — ALL SUBMITTED RUNS</div>
+        <svg class="chart-svg" id="diff-bars" viewBox="0 0 720 240" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="chart-caption">Each bar is a 0.5-wide difficulty bin. If everyone's clustered down low, blame the scale, not yourself.</p>
+      </div>
+      <div class="chart-block" id="runs-scatter-block">
+        <div class="chart-title">DIFFICULTY VS QUESTIONS COMPLETED</div>
+        <svg class="chart-svg" id="runs-scatter" viewBox="0 0 720 280" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="chart-caption">Each dot is one submitted run. Magenta dots are yours. Hover for details.</p>
+      </div>
     </section>
     <section id="daily-board-section" class="hidden">
       <h2 id="daily-board-heading">Today's Daily Leaderboard</h2>

@@ -146,6 +146,10 @@ async function startDailyGauntlet() {
     location.href = 'index.html';
     return;
   }
+  if (r.already_started) {
+    location.href = 'index.html?forfeit=1';
+    return;
+  }
 
   state.sessionId = r.session_id;
   state.totalQuestions = r.total_questions;

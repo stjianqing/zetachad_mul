@@ -945,3 +945,72 @@ test('challenge lock: /start for unknown challenge returns 404', async (t) => {
   assert.equal(r.statusCode, 404);
   assert.equal(r.json().error, 'not_found');
 });
+
+test('forfeit sweep: uses recipient_started_at when set (start at t-31min → forfeited)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  await startChallenge(app, bob.cookie, challengeId);
+
+  // Backdate recipient_started_at to 31 minutes ago. responded_at stays recent.
+  await pool.query(
+    `UPDATE challenges SET recipient_started_at = now() - interval '31 minutes' WHERE id=$1`,
+    [challengeId]
+  );
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 1);
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'forfeited');
+});
+
+test('forfeit sweep: uses recipient_started_at when set (start at t-25min → not forfeited)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  await startChallenge(app, bob.cookie, challengeId);
+
+  // Backdate responded_at to 31 minutes ago, but recipient_started_at is recent (just now).
+  // The COALESCE should pick recipient_started_at and decline to forfeit.
+  await pool.query(
+    `UPDATE challenges SET responded_at = now() - interval '31 minutes' WHERE id=$1`,
+    [challengeId]
+  );
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 0);
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'accepted');
+});
+
+test('forfeit sweep: uses responded_at when never started (responded_at at t-31min → forfeited)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  // Don't call /start. recipient_started_at stays NULL.
+
+  await pool.query(
+    `UPDATE challenges SET responded_at = now() - interval '31 minutes' WHERE id=$1`,
+    [challengeId]
+  );
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 1);
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'forfeited');
+});

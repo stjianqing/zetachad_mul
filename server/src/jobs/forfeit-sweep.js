@@ -6,7 +6,7 @@ export async function runForfeitSweep(pool) {
      SET status='forfeited'
      WHERE status='accepted'
        AND recipient_run_id IS NULL
-       AND responded_at < now() - ${FORFEIT_AGE}`
+       AND COALESCE(recipient_started_at, responded_at) < now() - ${FORFEIT_AGE}`
   );
   return r.rowCount;
 }

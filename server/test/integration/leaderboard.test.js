@@ -84,9 +84,9 @@ test('GET /api/leaderboard/runs returns one entry per submitted run, not per use
   const a = await registerAndCookie(app, 'alice');
   const b = await registerAndCookie(app, 'bob');
 
-  await playAndSubmit(app, sessionStore, a, 3);
-  await playAndSubmit(app, sessionStore, a, 5);
-  await playAndSubmit(app, sessionStore, b, 4);
+  await playAndSubmit(app, sessionStore, a, 13);
+  await playAndSubmit(app, sessionStore, a, 15);
+  await playAndSubmit(app, sessionStore, b, 14);
 
   const res = await app.inject({ method: 'GET', url: '/api/leaderboard/runs' });
   assert.equal(res.statusCode, 200);
@@ -99,23 +99,28 @@ test('GET /api/leaderboard/runs returns one entry per submitted run, not per use
     assert.ok('difficulty' in r);
   }
   const scoresByUser = runs.reduce((acc, r) => { (acc[r.username] ||= []).push(r.score); return acc; }, {});
-  assert.deepEqual(new Set(scoresByUser.alice), new Set([3, 5]));
-  assert.deepEqual(scoresByUser.bob, [4]);
+  assert.deepEqual(new Set(scoresByUser.alice), new Set([13, 15]));
+  assert.deepEqual(scoresByUser.bob, [14]);
 });
 
-test('GET /api/leaderboard/runs includes unsubmitted default-config runs but excludes practice and daily-gauntlet', async (t) => {
+test('GET /api/leaderboard/runs includes unsubmitted default-config runs but excludes practice, daily-gauntlet, and low-score outliers', async (t) => {
   if (skipIfNoDb(t)) return;
   const { app, sessionStore, pool } = await freshApp();
   t.after(() => app.close());
 
   const a = await registerAndCookie(app, 'alice');
-  await playAndSubmit(app, sessionStore, a, 3);
+  await playAndSubmit(app, sessionStore, a, 13);
   const userId = '(SELECT id FROM users WHERE username = \'alice\')';
 
   // Default-config drill, never submitted (e.g. didn't beat PB).
   await pool.query(
     `INSERT INTO runs (user_id, score, duration_ms, submitted_to_leaderboard)
-     VALUES (${userId}, 7, 120000, false)`
+     VALUES (${userId}, 17, 120000, false)`
+  );
+  // Low-score outlier (likely afk/abandoned) — should be excluded by score >= 10 floor.
+  await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, submitted_to_leaderboard)
+     VALUES (${userId}, 5, 120000, false)`
   );
   // Practice run — should be excluded.
   await pool.query(
@@ -131,7 +136,7 @@ test('GET /api/leaderboard/runs includes unsubmitted default-config runs but exc
   const res = await app.inject({ method: 'GET', url: '/api/leaderboard/runs' });
   const { runs } = res.json();
   assert.equal(runs.length, 2);
-  assert.deepEqual(new Set(runs.map((r) => r.score)), new Set([3, 7]));
+  assert.deepEqual(new Set(runs.map((r) => r.score)), new Set([13, 17]));
 });
 
 test('GET /api/leaderboard/runs returns runs ordered by played_at desc', async (t) => {
@@ -140,9 +145,9 @@ test('GET /api/leaderboard/runs returns runs ordered by played_at desc', async (
   t.after(() => app.close());
 
   const a = await registerAndCookie(app, 'alice');
-  await playAndSubmit(app, sessionStore, a, 3);
-  await playAndSubmit(app, sessionStore, a, 4);
-  await playAndSubmit(app, sessionStore, a, 5);
+  await playAndSubmit(app, sessionStore, a, 13);
+  await playAndSubmit(app, sessionStore, a, 14);
+  await playAndSubmit(app, sessionStore, a, 15);
 
   const res = await app.inject({ method: 'GET', url: '/api/leaderboard/runs' });
   const { runs } = res.json();

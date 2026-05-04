@@ -251,3 +251,25 @@ test('daily-gauntlet: day rollover stamps yesterday on completion started yester
   assert.equal(body.mode, 'daily-gauntlet');
   assert.equal(body.already_completed, undefined);
 });
+
+test('daily-gauntlet: /start inserts a lock row with submitted=false', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const r = await startDaily(app, cookie);
+  assert.equal(r.statusCode, 200);
+  assert.ok(r.json().session_id);
+
+  const { rows } = await pool.query(
+    'SELECT score, duration_ms, submitted_to_leaderboard, daily_gauntlet_date, seed FROM runs WHERE user_id = (SELECT id FROM users WHERE username=$1)',
+    ['alice']
+  );
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].score, 0);
+  assert.equal(Number(rows[0].duration_ms), 0);
+  assert.equal(rows[0].submitted_to_leaderboard, false);
+  assert.ok(rows[0].daily_gauntlet_date);
+  assert.ok(Number.isInteger(Number(rows[0].seed)) && Number(rows[0].seed) > 0, 'lock row should have a date-derived seed');
+});

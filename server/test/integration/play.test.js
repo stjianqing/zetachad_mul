@@ -311,3 +311,23 @@ test('time-up payload on guest run includes difficulty:null', async (t) => {
   assert.equal(tu.json().time_up, true);
   assert.equal(tu.json().difficulty, null);
 });
+
+test('time-up payload on logged-in zero-attempts run includes difficulty:null', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const start = await app.inject({ method: 'POST', url: '/api/play/start', payload: { config: DEFAULT_CONFIG }, headers: { cookie } });
+  const { session_id } = start.json();
+
+  // No answers — force time-up immediately.
+  const sess = sessionStore.get(session_id);
+  sess.startedAt = Date.now() - sess.durationMs - 1;
+  const tu = await app.inject({ method: 'POST', url: '/api/play/answer', payload: { session_id, answer: '' }, headers: { cookie } });
+
+  assert.equal(tu.statusCode, 200);
+  assert.equal(tu.json().time_up, true);
+  // flushRunIfRecording early-returns when attempts.length === 0, so live.difficulty is never set.
+  assert.equal(tu.json().difficulty, null);
+});

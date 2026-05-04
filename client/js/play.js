@@ -70,7 +70,8 @@ const state = {
   questionIndex: 0,
   isChallenge: false,
   challengeId: null,
-  ghostTicker: null
+  ghostTicker: null,
+  lastRunId: null
 };
 
 function readPracticeSession() {
@@ -350,6 +351,7 @@ function onInput() {
 
 async function finish(payload) {
   state.finished = true;
+  state.lastRunId = payload?.run_id ?? null;
   document.body.classList.remove('drilling');
   els.form().classList.add('hidden');
   document.querySelector('.drill-bar').classList.add('hidden');
@@ -410,7 +412,60 @@ async function finish(payload) {
     els.postNote().textContent = 'Custom runs aren\'t eligible for the leaderboard.';
   }
 
+  maybeShowChallengeBlock();
+
   els.playAgain().addEventListener('click', () => { location.href = 'index.html'; });
+}
+
+function setChallengeStatus(msg) {
+  const el = document.getElementById('challenge-status');
+  if (el) el.textContent = msg;
+}
+
+function maybeShowChallengeBlock() {
+  const eligible = state.authedUser != null
+    && state.isDefaultConfig
+    && !state.practice
+    && !state.dailyGauntlet
+    && !state.isChallenge
+    && state.lastRunId != null;
+  if (!eligible) return;
+  const block = document.getElementById('challenge-block');
+  if (!block) return;
+  block.hidden = false;
+
+  document.getElementById('challenge-send').onclick = async () => {
+    const username = document.getElementById('challenge-username').value.trim();
+    if (!username) return;
+    if (username.toLowerCase() === state.authedUser.username.toLowerCase()) {
+      setChallengeStatus("can't challenge yourself.");
+      return;
+    }
+    try {
+      await api.challenges.create({ challenger_run_id: state.lastRunId, recipient_username: username });
+      block.querySelector('#challenge-form').remove();
+      block.querySelector('.or-sep').remove();
+      block.querySelector('#challenge-share-link').remove();
+      setChallengeStatus(`challenge sent to ${username}. they'll see it next time they're here.`);
+    } catch (e) {
+      if (e.status === 404) setChallengeStatus(`no user named "${username}".`);
+      else if (e.status === 400) setChallengeStatus(e.body?.error ?? 'cannot send challenge.');
+      else setChallengeStatus('something broke. try again.');
+    }
+  };
+
+  document.getElementById('challenge-share-link').onclick = async () => {
+    try {
+      const r = await api.challenges.create({ challenger_run_id: state.lastRunId, share_link: true });
+      const url = window.location.origin + r.share_url;
+      const ok = await navigator.clipboard.writeText(url).then(() => true).catch(() => false);
+      setChallengeStatus(ok
+        ? `link copied — anyone with this link gets one shot at your run.`
+        : url);
+    } catch (e) {
+      setChallengeStatus('failed to generate link.');
+    }
+  };
 }
 
 async function renderDailyGauntletScoreView(payload) {

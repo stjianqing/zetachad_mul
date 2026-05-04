@@ -1279,3 +1279,40 @@ button, a.secondary, .auth-form input, .leaderboard-table a {
 }
 .ghost-row .ghost-diff.ahead  { color: #9fe870; }
 .ghost-row .ghost-diff.behind { color: #ff5c5c; }
+
+#challenge-block {
+  margin: 1.5rem 0 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(159, 232, 112, 0.25);
+  border-radius: 6px;
+  text-align: center;
+}
+#challenge-block h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.15em;
+  color: #9fe870;
+}
+#challenge-form { display: flex; gap: 0.5rem; justify-content: center; }
+#challenge-form input {
+  flex: 1 1 auto;
+  max-width: 18rem;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: inherit;
+  font-family: inherit;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+}
+#challenge-block .or-sep { margin: 0.6rem 0; color: rgba(255,255,255,0.35); font-size: 0.85em; }
+#challenge-block #challenge-share-link {
+  background: transparent;
+  border: 1px dashed rgba(159, 232, 112, 0.5);
+  color: #9fe870;
+  font-family: inherit;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+#challenge-block #challenge-share-link:hover { background: rgba(159, 232, 112, 0.08); }
+#challenge-status { margin-top: 0.75rem; font-size: 0.85em; min-height: 1em; }

@@ -43,6 +43,23 @@ async function getLatestRunId(pool, userId) {
   return Number(r.rows[0].id);
 }
 
+async function acceptChallenge(app, cookie, challengeId) {
+  return app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie }
+  });
+}
+
+async function startChallenge(app, cookie, challengeId) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/play/start',
+    payload: { mode: 'challenge', challenge_id: challengeId },
+    headers: { cookie }
+  });
+}
+
 test('create challenge by username — happy path', async (t) => {
   if (skipIfNoDb(t)) return;
   const { app, pool, sessionStore } = await freshApp();
@@ -816,4 +833,115 @@ test('play/start with mode=challenge: returns session with same seed as challeng
   assert.equal(body.challenge_id, challengeId);
   const sess = sessionStore.get(body.session_id);
   assert.equal(sess.seed, challengerSeed);
+});
+
+test('challenge lock: first /start sets recipient_started_at', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  const before = await pool.query(
+    'SELECT recipient_started_at FROM challenges WHERE id=$1', [challengeId]
+  );
+  assert.equal(before.rows[0].recipient_started_at, null);
+
+  const r = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(r.statusCode, 200);
+  assert.ok(r.json().session_id);
+
+  const after = await pool.query(
+    'SELECT recipient_started_at FROM challenges WHERE id=$1', [challengeId]
+  );
+  assert.ok(after.rows[0].recipient_started_at, 'recipient_started_at should be set after first /start');
+});
+
+test('challenge lock: second /start while lock held returns already_started', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  const first = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(first.statusCode, 200);
+  assert.ok(first.json().session_id);
+
+  const second = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(second.statusCode, 200);
+  const body = second.json();
+  assert.equal(body.already_started, true);
+  assert.equal(body.session_id, undefined, 'no session should be created on the second call');
+});
+
+test('challenge lock: race-recovery — pre-set recipient_started_at returns already_started', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  // Simulate "another tab won the race" by directly setting recipient_started_at.
+  await pool.query(
+    'UPDATE challenges SET recipient_started_at = now() WHERE id = $1',
+    [challengeId]
+  );
+
+  const r = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().already_started, true);
+});
+
+test('challenge lock: /start as non-recipient returns 403', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const carol = await registerAndCookie(app, 'carol');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+
+  const r = await startChallenge(app, carol.cookie, challengeId);
+  assert.equal(r.statusCode, 403);
+  assert.equal(r.json().error, 'not_recipient');
+});
+
+test('challenge lock: /start when status is not accepted returns 409', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  // Manually move status away from 'accepted' to simulate forfeited or completed.
+  await pool.query("UPDATE challenges SET status='declined' WHERE id=$1", [challengeId]);
+
+  const r = await startChallenge(app, bob.cookie, challengeId);
+  assert.equal(r.statusCode, 409);
+  assert.equal(r.json().error, 'challenge_not_accepted');
+});
+
+test('challenge lock: /start for unknown challenge returns 404', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+
+  const bob = await registerAndCookie(app, 'bob');
+  const r = await startChallenge(app, bob.cookie, 999999);
+  assert.equal(r.statusCode, 404);
+  assert.equal(r.json().error, 'not_found');
 });

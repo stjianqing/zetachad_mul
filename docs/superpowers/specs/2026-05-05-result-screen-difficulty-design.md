@@ -2,35 +2,52 @@
 
 ## Goal
 
-After a 2-minute default-config run ends, show the run's computed difficulty below the final score on the result screen.
+After a 2-minute default-config run ends, show the run's computed difficulty on the result screen — without requiring the player to submit to the leaderboard first.
+
+## Background — what already exists
+
+Significant infrastructure is already in place:
+
+- `client/play.html:35` already has `<div id="run-difficulty" class="run-difficulty hidden"></div>` on the result screen, right under `#final-score`.
+- `client/js/play.js` already has a `showDifficulty(d)` function (line 580) that renders `Run difficulty: 6.3 / 10` with a colour tier (`easy` / `mid` / `hard` / `extreme`) and matching CSS in `client/css/styles.css:1003`.
+- `server/src/routes/play.routes.js` already computes difficulty inside `flushRunIfRecording` and stamps it onto the live session as `liveAfter.difficulty = difficulty` (line 287).
+- The leaderboard `submit` endpoint (`server/src/routes/board.routes.js:19,27,59`) already returns `difficulty` in its response, and the client calls `showDifficulty(r?.difficulty ?? null)` after a successful submit.
+
+## What is missing
+
+The difficulty is currently visible **only after the player submits to the leaderboard.** In `finish(payload)` at `client/js/play.js:401`, the time-up handler explicitly calls `showDifficulty(null)`, then waits for the submit response to overwrite it. This means:
+
+- A logged-in player who clicks "Yes, submit" sees difficulty.
+- A logged-in player who declines the submit modal never sees difficulty.
+- A guest never sees difficulty.
+- A non-default-config run never sees difficulty (correct — there is none).
+
+This spec wires the time-up payload to carry difficulty so the result screen shows it immediately.
 
 ## Scope
 
 **In scope:**
-- The 2-minute (default-config) run flow only.
-- Surfacing the existing per-run `difficulty` value (already computed by `server/src/run-difficulty/compute.js` and persisted on the run row) on the post-run result UI.
+- Add `difficulty` to the `/api/play/answer` `time_up` response payload (non-daily-gauntlet branch).
+- In `finish(payload)`, replace the unconditional `showDifficulty(null)` with `showDifficulty(payload.difficulty ?? null)`.
 
 **Out of scope:**
-- Changing how difficulty is computed.
-- Adding difficulty to non-default-config runs (they don't record attempts, so no difficulty is computed for them).
-- Adding difficulty to the daily-gauntlet finish UI.
-- Backfilling or surfacing difficulty in any other UI surface (leaderboard already has its own treatment).
+- Any change to `showDifficulty()`, the DOM element, or the CSS tiers — they stay exactly as they are.
+- Any change to `computeRunDifficulty` or median-cache plumbing.
+- Any change to the daily-gauntlet finish UI.
+- Any change to the post-submit `showDifficulty(r.difficulty)` call sites — they remain (idempotent re-render with the same value).
 
-## Data flow
-
-1. Player answers the last question or the 2-min timer expires → `/api/play/answer` returns `{ time_up: true, ... }`.
-2. Inside that branch, the route calls `flushRunIfRecording`. That function:
-   - Computes `difficulty` via `computeRunDifficulty(attempts, medianCache)`.
-   - Persists it on the `runs` row.
-   - Stamps it onto the live session object: `liveAfter.difficulty = difficulty` (`server/src/routes/play.routes.js:287`).
-3. After `flushRunIfRecording` returns, the route reads the difficulty back off the session and includes it in the response payload as `difficulty` (number or `null`).
-4. The client (`client/js/play.js`) receives the payload, reads `payload.difficulty`, and renders it into a new DOM element below the final score.
-
-## Backend changes
+## Backend change
 
 File: `server/src/routes/play.routes.js`
 
-In the non-daily-gauntlet branch of the `time_up` handler (around line 201–202), include `difficulty` in the response:
+In the non-daily-gauntlet branch of the `time_up` handler (currently at line 201–202):
+
+```js
+const live = sessionStore.get(session_id);
+return { time_up: true, final_score: r.finalScore, run_id: live?.runId ?? null };
+```
+
+becomes:
 
 ```js
 const live = sessionStore.get(session_id);
@@ -42,58 +59,57 @@ return {
 };
 ```
 
-Notes:
-- `flushRunIfRecording` is awaited before this `return`, so by the time we read `live.difficulty` it has been stamped (or the function early-returned without stamping, in which case the read yields `undefined` → `null`).
-- The early-return cases inside `flushRunIfRecording` (`!rec || rec.userId == null || rec.attempts.length === 0`) naturally produce `difficulty: null` in the response. No additional special-casing is required.
-- The daily-gauntlet branch is left unchanged.
+`flushRunIfRecording(req, session_id)` is awaited just above this `return`, so by the time we read `live.difficulty` it has been stamped (or the function early-returned without stamping, in which case we get `undefined` → coerced to `null` by the `??`).
 
-## Frontend changes
+The early-return cases inside `flushRunIfRecording` (`!rec || rec.userId == null || rec.attempts.length === 0`) naturally produce `difficulty: null`. No special-casing needed.
 
-### HTML — `client/play.html`
+The daily-gauntlet branch (which has its own response shape) is left unchanged.
 
-Add a sibling element to the existing final-score element. Exact markup must match the conventions already used on this page:
+## Frontend change
 
-```html
-<div id="final-score">...</div>
-<div class="final-difficulty">Difficulty: <span id="final-difficulty">—</span></div>
+File: `client/js/play.js`
+
+At line 401 inside `finish(payload)`:
+
+```js
+// Difficulty for practice runs comes from the implicit submit below; for normal
+// runs it comes from the user's manual submit. In both cases we wait for the
+// submit response. Until then, hide the row.
+showDifficulty(null);
 ```
 
-The em-dash is the default placeholder so the layout doesn't shift between "no difficulty yet" and "difficulty rendered."
+becomes:
 
-### JS — `client/js/play.js`
+```js
+showDifficulty(payload.difficulty ?? null);
+```
 
-1. Add a selector to the `els` map (alongside `finalScore` at line 48):
-   ```js
-   finalDifficulty: () => document.getElementById('final-difficulty'),
-   ```
-2. In `finish(payload)` (around line 395, where `final_score` is rendered):
-   - Read `payload.difficulty`.
-   - If it's a finite number, write `value.toFixed(1)` to `els.finalDifficulty().textContent`.
-   - Otherwise, leave the existing `—` placeholder in place.
+Drop the stale comment block — the rationale no longer applies.
 
-### CSS
+The post-submit `showDifficulty(r?.difficulty ?? null)` calls (lines 418 and 565) stay. They re-render with the same value the player has already been seeing; no flicker, no mismatch.
 
-Add a `.final-difficulty` rule that styles the line as secondary text (smaller font / dimmer colour than the score). Reuse existing typography and colour tokens already present in the result-screen styles. Do not introduce new design tokens.
+## Display rules (unchanged)
 
-## Display rules
+`showDifficulty(d)` already handles every case correctly:
 
-| Condition | Rendered text |
+| Condition | UI |
 |---|---|
-| `difficulty` is a finite number | `Difficulty: <one-decimal>` (e.g. `Difficulty: 6.3`) |
-| `difficulty` is `null` / `undefined` / not finite | `Difficulty: —` |
+| `d` is a finite number | `Run difficulty: 6.3 / 10` with tier colour |
+| `d` is `null` | element gets the `hidden` class — row disappears |
 
-The stored value carries two decimals; the UI shows one decimal. Players don't need centisecond precision, and one decimal reads cleaner.
+Tier thresholds (`easy ≤4 < mid ≤6 < hard ≤8 < extreme`) and CSS colours stay as-is.
 
 ## Edge cases
 
 | Case | Behaviour |
 |---|---|
-| Default-config run, ≥1 attempt, medianCache available | Number rendered |
-| Anonymous user (no `userId`) | `flushRunIfRecording` early-returns; payload `difficulty: null`; UI shows `—` |
-| Zero attempts (timer expired before any answer submitted) | Same as anonymous — `null` → `—` |
-| `medianCache` unavailable or cluster lookups all fail | `computeRunDifficulty` returns `null`; payload `null`; UI shows `—` |
-| Non-default config | `recordsAttempts` already returns false; no attempts; no difficulty; UI shows `—` |
-| Old runs already in DB | Not relevant — the result screen reads from the in-memory session at finish time, never from the DB |
+| Default-config run, ≥1 attempt, medianCache available | `difficulty` rendered immediately on time-up |
+| Anonymous user (guest) | `flushRunIfRecording` early-returns; payload `difficulty: null`; row hidden |
+| Zero-attempts run (timer expired before any answer submitted) | Same as guest — `null` → row hidden |
+| `medianCache` unavailable / cluster lookups all fail | `computeRunDifficulty` returns `null`; row hidden |
+| Non-default config | `recordsAttempts` returns false; no attempts collected; difficulty stays `null`; row hidden |
+| Practice run | `flushRunIfRecording` runs and stamps difficulty; payload includes it; difficulty shown immediately. The implicit `api.submit()` that follows will re-render with the same value (no-op visually). |
+| Logged-in default-config run, user declines submit modal | Difficulty already shown — modal decline no longer hides it |
 
 ## Testing
 
@@ -101,21 +117,24 @@ The stored value carries two decimals; the UI shows one decimal. Players don't n
 
 Add to `server/test/integration/play.test.js`:
 
-1. Time-up response for a default-config run with attempts and a working medianCache → payload includes `difficulty` as a finite number.
-2. Time-up response for an anonymous user → payload includes `difficulty: null`.
-3. Time-up response for a zero-attempts run → payload includes `difficulty: null`.
+1. Time-up response on a logged-in default-config run with attempts → payload includes a finite `difficulty`.
+2. Time-up response on a guest (anonymous) run → payload includes `difficulty: null`.
+3. Time-up response on a logged-in run with zero answered questions → payload includes `difficulty: null`.
 
 ### Client
 
-`client/js/play.js` is vanilla DOM JS. If no existing client unit-test harness covers this file, rely on manual verification rather than scaffolding a new harness for this single change.
+`client/js/play.js` is vanilla DOM JS with no existing unit-test harness. Manual verification only.
 
 ### Manual verification
 
-- Finish a 2-min default-config run with answers → difficulty appears below the score, one decimal.
-- Start a 2-min run; do not answer any question; let the timer expire → result shows `—`.
-- Run a custom-config session and finish → result shows `—`.
+- Log in, finish a 2-min default-config run with several correct answers, decline the submit modal → difficulty row visible immediately, stays visible after declining.
+- Log in, finish a 2-min default-config run, accept the submit modal → difficulty row visible before and after submit (no flicker).
+- Play a guest 2-min run → time-up screen shows no difficulty row (hidden).
+- Start a 2-min run, answer nothing, let timer expire → no difficulty row.
+- Run a custom-config 2-min session → no difficulty row.
+- Finish a practice run → difficulty row visible immediately.
 
 ## Risks
 
-- **None expected.** The backend change is a read-only addition to a response payload. The frontend change is additive (new DOM node, new selector). No existing code paths change behaviour.
-- The only correctness concern is that we read `live.difficulty` *after* `await flushRunIfRecording(...)`, which is already the case in the proposed change.
+- **None expected.** The backend change is a read-only field addition to a response payload. The frontend change replaces a hard-coded `null` with the payload value. All existing UI behaviour for non-default and guest runs is preserved (still `null` → hidden).
+- The post-submit `showDifficulty` calls remain and overwrite with the same value — verified harmless because `showDifficulty` is idempotent for a given `d`.

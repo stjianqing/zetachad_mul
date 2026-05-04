@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { captionForResult } from './challenge-copy.js';
 
 export async function initChallengesHome() {
   const [incoming, outgoing] = await Promise.all([
@@ -58,14 +59,19 @@ function renderResultsBanner(unreadResults) {
     line.className = 'result-line';
     let txt;
     if (r.status === 'completed') {
+      // Score line is functional copy — keep it factual.
       const verb = r.recipient_score > r.challenger_score ? 'beat'
         : r.recipient_score < r.challenger_score ? 'fell short of'
         : 'tied';
       txt = `${r.recipient_username ?? 'someone'} ${verb} your ${r.challenger_score} with ${r.recipient_score}.`;
-    } else if (r.status === 'declined') {
-      txt = `${r.recipient_username ?? 'they'} chickened out.`;
-    } else if (r.status === 'forfeited') {
-      txt = `${r.recipient_username ?? 'someone'} quit halfway through.`;
+    } else {
+      // Decline/forfeit get the rotating caption.
+      txt = captionForResult({
+        status: r.status,
+        viewerWon: false,
+        otherUsername: r.recipient_username,
+        challengeId: r.id
+      });
     }
     const rematchLink = r.status === 'completed' && r.recipient_username && r.recipient_score > r.challenger_score
       ? `<a href="play.html?rematch_target=${encodeURIComponent(r.recipient_username)}">REMATCH</a>`

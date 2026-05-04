@@ -1,6 +1,7 @@
 import { api } from './api.js';
 import { renderDragRace } from './drag-race.js';
 import { renderHeadToHead } from './head-to-head.js';
+import { captionForResult } from './challenge-copy.js';
 
 const params = new URLSearchParams(window.location.search);
 const id = Number(params.get('id'));
@@ -55,7 +56,13 @@ const els = {
 
     const youWon = (viewerIs === 'challenger' && result.winner === 'challenger')
       || (viewerIs === 'recipient' && result.winner === 'recipient');
-    els.caption.textContent = youWon ? "STILL HAIL." : "Better luck never.";
+    const otherUsername = viewerIs === 'challenger' ? result.recipient?.username : result.challenger.username;
+    els.caption.textContent = captionForResult({
+      status: result.status,
+      viewerWon: youWon,
+      otherUsername,
+      challengeId: id
+    });
 
     if (viewerIs === 'challenger' && result.winner === 'recipient') {
       els.rematch.hidden = false;
@@ -65,11 +72,12 @@ const els = {
     els.replay.hidden = true;
     els.viewQuestions.hidden = true;
     els.dragRace.hidden = true;
-    if (result.status === 'declined') {
-      els.caption.textContent = `${result.recipient?.username ?? 'they'} chickened out.`;
-    } else if (result.status === 'forfeited') {
-      els.caption.textContent = `${result.recipient?.username ?? 'they'} quit halfway through.`;
-    }
+    els.caption.textContent = captionForResult({
+      status: result.status,
+      viewerWon: false,
+      otherUsername: result.recipient?.username,
+      challengeId: id
+    });
   }
 })();
 

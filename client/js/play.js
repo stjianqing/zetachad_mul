@@ -35,6 +35,7 @@ function escapeHtml(s) {
 
 const params = new URLSearchParams(location.search);
 const challengeId = params.has('challenge') ? Number(params.get('challenge')) : null;
+const rematchTarget = params.get('rematch_target');
 
 const els = {
   score: () => document.getElementById('score'),
@@ -439,6 +440,14 @@ function maybeShowChallengeBlock() {
   const block = document.getElementById('challenge-block');
   if (!block) return;
   block.hidden = false;
+
+  if (rematchTarget) {
+    const usernameInput = document.getElementById('challenge-username');
+    if (usernameInput) usernameInput.value = rematchTarget;
+    const header = block.querySelector('h3');
+    if (header) header.textContent = `REMATCH: ${rematchTarget}`;
+    setTimeout(() => document.getElementById('challenge-send')?.focus(), 0);
+  }
 
   document.getElementById('challenge-send').onclick = async () => {
     const username = document.getElementById('challenge-username').value.trim();

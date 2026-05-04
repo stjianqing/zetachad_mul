@@ -27,6 +27,9 @@
       <button class="daily-hero-btn" id="daily-hero-btn" disabled>—</button>
     </section>
 
+    <div id="challenge-modal-root"></div>
+    <div id="challenge-results-banner"></div>
+
     <div class="champ-banner" id="champion-banner"></div>
 
     <section class="speed-kings" id="speed-kings">
@@ -111,6 +114,11 @@
           </div>
         </fieldset>
       </div>
+    </details>
+
+    <details id="outgoing-challenges" class="outgoing-challenges" hidden>
+      <summary>OUTGOING CHALLENGES (<span id="outgoing-count">0</span>)</summary>
+      <div id="outgoing-list"></div>
     </details>
   </main>
   <script type="module" src="js/landing.js"></script>

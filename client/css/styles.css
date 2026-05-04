@@ -1379,3 +1379,64 @@ button, a.secondary, .auth-form input, .leaderboard-table a {
 .h2h-table th, .h2h-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid rgba(159, 232, 112, 0.1); font-size: 0.9em; }
 .h2h-table tr.faster-correct { background: rgba(159, 232, 112, 0.06); }
 .h2h-table tr.slower-or-wrong { background: rgba(255, 92, 92, 0.06); }
+
+/* ----- Challenge home page ----- */
+.challenge-modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+.challenge-modal {
+  background: #0d0f0c;
+  border: 1px solid #9fe870;
+  padding: 1.5rem 2rem;
+  max-width: 420px;
+  text-align: center;
+  font-family: inherit;
+  border-radius: 6px;
+}
+.challenge-modal h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+  color: #9fe870;
+}
+.challenge-modal p { margin: 0.4rem 0; }
+.challenge-modal .actions {
+  display: flex; gap: 0.5rem; justify-content: center;
+  margin-top: 1rem;
+}
+.challenge-modal .actions button {
+  background: transparent;
+  border: 1px solid rgba(159, 232, 112, 0.5);
+  color: #9fe870;
+  font-family: inherit;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+}
+.challenge-modal .actions button:hover { background: rgba(159, 232, 112, 0.08); }
+.results-banner { display: flex; flex-direction: column; gap: 0.5rem; margin: 1rem 0; }
+.result-line {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgba(159, 232, 112, 0.3);
+  border-radius: 4px;
+  font-size: 0.95em;
+}
+.result-line .actions { margin-left: auto; display: flex; gap: 0.5rem; }
+.result-line .actions a {
+  color: #9fe870;
+  text-decoration: none;
+  letter-spacing: 0.08em;
+  font-size: 0.85em;
+}
+.outgoing-challenges { margin-top: 1.5rem; }
+.outgoing-challenges summary { cursor: pointer; letter-spacing: 0.1em; font-size: 0.9em; }
+.outgoing-row {
+  display: flex; gap: 0.75rem;
+  padding: 0.25rem 0;
+  font-size: 0.9em;
+}
+.outgoing-row .muted { color: rgba(255,255,255,0.4); margin-left: auto; }

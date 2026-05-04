@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { initChallengesHome } from './challenges-home.js';
 
 const DEFAULT_CONFIG = {
   ops: {
@@ -230,4 +231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderUserArea(user);
   await renderDailyHero(user);
   await renderDailyBoardWidget(user);
+  if (user) {
+    initChallengesHome().catch(err => console.error('challenges-home init failed', err));
+  }
 });

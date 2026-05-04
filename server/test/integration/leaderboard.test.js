@@ -103,24 +103,35 @@ test('GET /api/leaderboard/runs returns one entry per submitted run, not per use
   assert.deepEqual(scoresByUser.bob, [4]);
 });
 
-test('GET /api/leaderboard/runs excludes runs not submitted to leaderboard', async (t) => {
+test('GET /api/leaderboard/runs includes unsubmitted default-config runs but excludes practice and daily-gauntlet', async (t) => {
   if (skipIfNoDb(t)) return;
   const { app, sessionStore, pool } = await freshApp();
   t.after(() => app.close());
 
   const a = await registerAndCookie(app, 'alice');
   await playAndSubmit(app, sessionStore, a, 3);
+  const userId = '(SELECT id FROM users WHERE username = \'alice\')';
 
-  // Insert a run directly that is not submitted to leaderboard.
+  // Default-config drill, never submitted (e.g. didn't beat PB).
   await pool.query(
     `INSERT INTO runs (user_id, score, duration_ms, submitted_to_leaderboard)
-     VALUES ((SELECT id FROM users WHERE username = 'alice'), 99, 120000, false)`
+     VALUES (${userId}, 7, 120000, false)`
+  );
+  // Practice run — should be excluded.
+  await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, submitted_to_leaderboard, practice)
+     VALUES (${userId}, 99, 60000, false, true)`
+  );
+  // Daily Gauntlet run — should be excluded (different game mode).
+  await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, submitted_to_leaderboard, daily_gauntlet_date)
+     VALUES (${userId}, 20, 35000, true, '2026-05-04')`
   );
 
   const res = await app.inject({ method: 'GET', url: '/api/leaderboard/runs' });
   const { runs } = res.json();
-  assert.equal(runs.length, 1);
-  assert.equal(runs[0].score, 3);
+  assert.equal(runs.length, 2);
+  assert.deepEqual(new Set(runs.map((r) => r.score)), new Set([3, 7]));
 });
 
 test('GET /api/leaderboard/runs returns runs ordered by played_at desc', async (t) => {

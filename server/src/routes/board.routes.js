@@ -87,7 +87,8 @@ export default async function boardRoutes(fastify, { pool, sessionStore, nowFn =
       `SELECT u.username, r.score, r.difficulty, r.played_at
        FROM runs r
        JOIN users u ON u.id = r.user_id
-       WHERE r.submitted_to_leaderboard = true
+       WHERE COALESCE(r.practice, false) = false
+         AND r.daily_gauntlet_date IS NULL
        ORDER BY r.played_at DESC
        LIMIT 1000`
     );

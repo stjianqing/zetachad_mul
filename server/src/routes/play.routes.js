@@ -209,7 +209,8 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
                duration_ms = $3,
                practice = $4,
                difficulty = $5,
-               submitted_to_leaderboard = $6
+               submitted_to_leaderboard = $6,
+               played_at = now()
            WHERE id = $1
            RETURNING id`,
           [preExistingRunId, rec.score, rec.durationMs, rec.practice, difficulty, rec.submittedToLeaderboard]

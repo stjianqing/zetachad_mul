@@ -270,4 +270,80 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
       requires_registration_to_submit: userId === null
     };
   });
+
+  fastify.get('/api/challenges/:id/result', { preHandler: requireAuth }, async (req, reply) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'invalid_id' });
+
+    const cRes = await pool.query(
+      `SELECT c.id, c.status, c.challenger_id, c.recipient_id, c.challenger_run_id, c.recipient_run_id,
+              cu.username AS challenger_username,
+              ru.username AS recipient_username,
+              cr.score AS challenger_score, cr.duration_ms AS challenger_duration_ms,
+              rr.score AS recipient_score, rr.duration_ms AS recipient_duration_ms
+       FROM challenges c
+       JOIN users cu ON cu.id = c.challenger_id
+       LEFT JOIN users ru ON ru.id = c.recipient_id
+       JOIN runs cr ON cr.id = c.challenger_run_id
+       LEFT JOIN runs rr ON rr.id = c.recipient_run_id
+       WHERE c.id = $1`,
+      [id]
+    );
+    const c = cRes.rows[0];
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+
+    const isChallenger = Number(c.challenger_id) === req.user.id;
+    const isRecipient = c.recipient_id !== null && Number(c.recipient_id) === req.user.id;
+    if (!isChallenger && !isRecipient) {
+      return reply.code(403).send({ error: 'forbidden' });
+    }
+    if (c.status === 'pending' || c.status === 'accepted') {
+      return reply.code(409).send({ error: 'not_terminal_yet' });
+    }
+
+    const flagCol = isChallenger ? 'challenger_seen_result' : 'recipient_seen_result';
+    await pool.query(`UPDATE challenges SET ${flagCol}=true WHERE id=$1`, [id]);
+
+    const challengerAttempts = (await pool.query(
+      `SELECT q_index, op, lhs, rhs, answer, user_answer, response_ms, correct
+       FROM attempts WHERE run_id=$1 ORDER BY q_index ASC`,
+      [c.challenger_run_id]
+    )).rows;
+
+    let recipientAttempts = [];
+    if (c.recipient_run_id !== null) {
+      recipientAttempts = (await pool.query(
+        `SELECT q_index, op, lhs, rhs, answer, user_answer, response_ms, correct
+         FROM attempts WHERE run_id=$1 ORDER BY q_index ASC`,
+        [c.recipient_run_id]
+      )).rows;
+    }
+
+    let winner = null;
+    if (c.status === 'completed') {
+      if (c.challenger_score > c.recipient_score) winner = 'challenger';
+      else if (c.recipient_score > c.challenger_score) winner = 'recipient';
+      else {
+        winner = c.challenger_duration_ms <= c.recipient_duration_ms ? 'challenger' : 'recipient';
+      }
+    }
+
+    return {
+      id: Number(c.id),
+      status: c.status,
+      challenger: {
+        username: c.challenger_username,
+        score: c.challenger_score,
+        duration_ms: c.challenger_duration_ms,
+        attempts: challengerAttempts
+      },
+      recipient: {
+        username: c.recipient_username,
+        score: c.recipient_score,
+        duration_ms: c.recipient_duration_ms,
+        attempts: recipientAttempts
+      },
+      winner
+    };
+  });
 }

@@ -553,3 +553,98 @@ test('redeem: second call → 410', async (t) => {
   const r = await app.inject({ method: 'POST', url: `/api/challenges/by-token/${token}/redeem` });
   assert.equal(r.statusCode, 410);
 });
+
+test('result: challenger fetches → flips challenger_seen_result', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/decline`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const r = await app.inject({
+    method: 'GET',
+    url: `/api/challenges/${challengeId}/result`,
+    headers: { cookie: alice.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+
+  const row = await pool.query('SELECT challenger_seen_result FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].challenger_seen_result, true);
+});
+
+test('result: third party → 403/404', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const eve = await registerAndCookie(app, 'eve');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/decline`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const r = await app.inject({
+    method: 'GET',
+    url: `/api/challenges/${challengeId}/result`,
+    headers: { cookie: eve.cookie }
+  });
+  assert.ok(r.statusCode === 403 || r.statusCode === 404);
+});
+
+test('result: completed challenge returns both runs joined', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const seed = Number(seedRow.rows[0].seed);
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed)
+     VALUES ($1, 60, 110000, false, $2) RETURNING id`,
+    [bob.userId, seed]
+  );
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: Number(insRun.rows[0].id) },
+    headers: { cookie: bob.cookie }
+  });
+
+  const r = await app.inject({
+    method: 'GET',
+    url: `/api/challenges/${challengeId}/result`,
+    headers: { cookie: alice.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.status, 'completed');
+  assert.ok(body.challenger);
+  assert.ok(body.recipient);
+  assert.equal(body.challenger.username, 'alice');
+  assert.equal(body.recipient.username, 'bob');
+  assert.ok(typeof body.winner === 'string');
+});

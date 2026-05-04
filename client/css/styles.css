@@ -1260,3 +1260,22 @@ button, a.secondary, .auth-form input, .leaderboard-table a {
   .daily-finish-headline { font-size: 1.5rem; }
   .daily-finish-time { font-size: 2.25rem; }
 }
+
+/* ----- Challenge mode ----- */
+.ghost-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-family: inherit;
+  color: rgba(159, 232, 112, 0.45);
+  font-size: 0.85em;
+  margin-top: 0.25rem;
+}
+.ghost-row .ghost-label { letter-spacing: 0.1em; text-transform: uppercase; }
+.ghost-row .ghost-score { font-weight: 600; }
+.ghost-row .ghost-diff {
+  margin-left: auto;
+  font-weight: 700;
+}
+.ghost-row .ghost-diff.ahead  { color: #9fe870; }
+.ghost-row .ghost-diff.behind { color: #ff5c5c; }

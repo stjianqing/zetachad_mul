@@ -162,4 +162,51 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
     }
     return { ok: true };
   });
+
+  fastify.post('/api/challenges/:id/submit-run', { preHandler: requireAuth }, async (req, reply) => {
+    const id = Number(req.params.id);
+    const { recipient_run_id } = req.body ?? {};
+    if (!Number.isInteger(id) || !Number.isInteger(recipient_run_id)) {
+      return reply.code(400).send({ error: 'invalid_input' });
+    }
+
+    const cRes = await pool.query(
+      `SELECT c.id, c.status, c.recipient_id, cr.seed AS challenger_seed
+       FROM challenges c JOIN runs cr ON cr.id = c.challenger_run_id
+       WHERE c.id = $1`,
+      [id]
+    );
+    const c = cRes.rows[0];
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+    if (Number(c.recipient_id) !== req.user.id) {
+      return reply.code(404).send({ error: 'not_recipient' });
+    }
+    if (c.status !== 'accepted') {
+      return reply.code(409).send({ error: 'not_in_accepted_state' });
+    }
+
+    const rRes = await pool.query(
+      'SELECT user_id, seed FROM runs WHERE id=$1',
+      [recipient_run_id]
+    );
+    const rrun = rRes.rows[0];
+    if (!rrun) return reply.code(400).send({ error: 'recipient_run_not_found' });
+    if (Number(rrun.user_id) !== req.user.id) {
+      return reply.code(400).send({ error: 'not_run_owner' });
+    }
+    if (Number(rrun.seed) !== Number(c.challenger_seed)) {
+      return reply.code(400).send({ error: 'seed_mismatch' });
+    }
+
+    const upd = await pool.query(
+      `UPDATE challenges
+       SET status='completed', recipient_run_id=$1
+       WHERE id=$2 AND status='accepted'`,
+      [recipient_run_id, id]
+    );
+    if (upd.rowCount === 0) {
+      return reply.code(409).send({ error: 'race_lost' });
+    }
+    return { ok: true };
+  });
 }

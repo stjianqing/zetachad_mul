@@ -346,3 +346,104 @@ test('decline: status flips and shows up on outgoing', async (t) => {
   const list = out.json();
   assert.equal(list[0].status, 'declined');
 });
+
+test('submit-run: links recipient run + flips status to completed', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const expectedSeed = Number(seedRow.rows[0].seed);
+
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed)
+     VALUES ($1, 50, 120000, false, $2) RETURNING id`,
+    [bob.userId, expectedSeed]
+  );
+  const recipientRunId = Number(insRun.rows[0].id);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: recipientRunId },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().ok, true);
+
+  const after = await pool.query('SELECT status, recipient_run_id FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(after.rows[0].status, 'completed');
+  assert.equal(Number(after.rows[0].recipient_run_id), recipientRunId);
+});
+
+test('submit-run: seed mismatch → 400', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed)
+     VALUES ($1, 50, 120000, false, 99999999) RETURNING id`,
+    [bob.userId]
+  );
+  const recipientRunId = Number(insRun.rows[0].id);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: recipientRunId },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 400);
+});
+
+test('submit-run: not in accepted state → 409', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed)
+     VALUES ($1, 50, 120000, false, $2) RETURNING id`,
+    [bob.userId, Number(seedRow.rows[0].seed)]
+  );
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: Number(insRun.rows[0].id) },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 409);
+});

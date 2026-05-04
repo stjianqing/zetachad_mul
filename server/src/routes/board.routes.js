@@ -82,6 +82,25 @@ export default async function boardRoutes(fastify, { pool, sessionStore, nowFn =
     };
   });
 
+  fastify.get('/api/leaderboard/runs', async () => {
+    const { rows } = await pool.query(
+      `SELECT u.username, r.score, r.difficulty, r.played_at
+       FROM runs r
+       JOIN users u ON u.id = r.user_id
+       WHERE r.submitted_to_leaderboard = true
+       ORDER BY r.played_at DESC
+       LIMIT 1000`
+    );
+    return {
+      runs: rows.map((r) => ({
+        username: r.username,
+        score: r.score,
+        difficulty: r.difficulty == null ? null : Number(r.difficulty),
+        played_at: r.played_at.toISOString()
+      }))
+    };
+  });
+
   fastify.get('/api/leaderboard/champion', async () => {
     const { rows } = await pool.query(
       `SELECT u.username, MAX(r.score) AS score

@@ -75,3 +75,69 @@ test('idempotent submit: second submit returns same rank without inserting', asy
   const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM runs');
   assert.equal(rows[0].n, 1);
 });
+
+test('GET /api/leaderboard/runs returns one entry per submitted run, not per user', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const a = await registerAndCookie(app, 'alice');
+  const b = await registerAndCookie(app, 'bob');
+
+  await playAndSubmit(app, sessionStore, a, 3);
+  await playAndSubmit(app, sessionStore, a, 5);
+  await playAndSubmit(app, sessionStore, b, 4);
+
+  const res = await app.inject({ method: 'GET', url: '/api/leaderboard/runs' });
+  assert.equal(res.statusCode, 200);
+  const { runs } = res.json();
+  assert.equal(runs.length, 3);
+  for (const r of runs) {
+    assert.ok(typeof r.username === 'string');
+    assert.ok(typeof r.score === 'number');
+    assert.ok(r.played_at);
+    assert.ok('difficulty' in r);
+  }
+  const scoresByUser = runs.reduce((acc, r) => { (acc[r.username] ||= []).push(r.score); return acc; }, {});
+  assert.deepEqual(new Set(scoresByUser.alice), new Set([3, 5]));
+  assert.deepEqual(scoresByUser.bob, [4]);
+});
+
+test('GET /api/leaderboard/runs excludes runs not submitted to leaderboard', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore, pool } = await freshApp();
+  t.after(() => app.close());
+
+  const a = await registerAndCookie(app, 'alice');
+  await playAndSubmit(app, sessionStore, a, 3);
+
+  // Insert a run directly that is not submitted to leaderboard.
+  await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, submitted_to_leaderboard)
+     VALUES ((SELECT id FROM users WHERE username = 'alice'), 99, 120000, false)`
+  );
+
+  const res = await app.inject({ method: 'GET', url: '/api/leaderboard/runs' });
+  const { runs } = res.json();
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].score, 3);
+});
+
+test('GET /api/leaderboard/runs returns runs ordered by played_at desc', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const a = await registerAndCookie(app, 'alice');
+  await playAndSubmit(app, sessionStore, a, 3);
+  await playAndSubmit(app, sessionStore, a, 4);
+  await playAndSubmit(app, sessionStore, a, 5);
+
+  const res = await app.inject({ method: 'GET', url: '/api/leaderboard/runs' });
+  const { runs } = res.json();
+  assert.equal(runs.length, 3);
+  // Most recently played run is first.
+  for (let i = 0; i < runs.length - 1; i++) {
+    assert.ok(runs[i].played_at >= runs[i + 1].played_at);
+  }
+});

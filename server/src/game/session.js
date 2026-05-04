@@ -50,7 +50,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
         weighting,
         mode,
         seedDate,                              // null for normal sessions
-        totalQuestions: isDailyGauntlet ? 60 : null,
+        totalQuestions: isDailyGauntlet ? 20 : null,
         currentQuestionIndex: isDailyGauntlet ? 0 : null,
         startTimeMs: startedAt,                // wall-clock start; used for daily-gauntlet duration
         startedAt,
@@ -113,7 +113,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       }
       session.lastQuestionAskedAt = t;
 
-      // Daily-gauntlet completion: 60 correct = run done.
+      // Daily-gauntlet completion: 20 correct = run done.
       if (session.mode === 'daily-gauntlet' && correct) {
         session.currentQuestionIndex += 1;
         if (session.currentQuestionIndex >= session.totalQuestions) {

@@ -29,9 +29,9 @@ async function answerOne(app, cookie, sessionId, sessionStore) {
   return ans.json();
 }
 
-async function clearAll60(app, cookie, sessionId, sessionStore) {
+async function clearAllN(app, cookie, sessionId, sessionStore, n = 20) {
   let last;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < n; i++) {
     last = await answerOne(app, cookie, sessionId, sessionStore);
     if (!last) break;
     if (last.time_up) return last;
@@ -59,7 +59,7 @@ test('daily-gauntlet: logged-in start returns expected envelope', async (t) => {
   assert.equal(r.statusCode, 200);
   const body = r.json();
   assert.equal(body.mode, 'daily-gauntlet');
-  assert.equal(body.total_questions, 60);
+  assert.equal(body.total_questions, 20);
   assert.equal(body.question_index, 0);
   assert.ok(body.session_id);
   assert.ok(body.question);
@@ -113,17 +113,17 @@ test('daily-gauntlet: cleared run persists with daily_gauntlet_date and submitte
   const start = await startDaily(app, cookie);
   const { session_id } = start.json();
 
-  const last = await clearAll60(app, cookie, session_id, sessionStore);
+  const last = await clearAllN(app, cookie, session_id, sessionStore);
   assert.equal(last.time_up, true);
   assert.equal(last.daily_gauntlet, true);
-  assert.equal(last.final_score, 60);
+  assert.equal(last.final_score, 20);
   assert.ok(last.time_ms > 0);
   assert.equal(last.rank, 1);
   assert.equal(last.total_today, 1);
 
   const { rows } = await pool.query('SELECT * FROM runs WHERE user_id = (SELECT id FROM users WHERE username=$1)', ['alice']);
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].score, 60);
+  assert.equal(rows[0].score, 20);
   assert.equal(rows[0].submitted_to_leaderboard, true);
   assert.ok(rows[0].daily_gauntlet_date);
 });
@@ -135,7 +135,7 @@ test('daily-gauntlet: re-start blocked after completion', async (t) => {
 
   const cookie = await registerAndCookie(app, 'alice');
   const start = await startDaily(app, cookie);
-  await clearAll60(app, cookie, start.json().session_id, sessionStore);
+  await clearAllN(app, cookie, start.json().session_id, sessionStore);
 
   const r = await startDaily(app, cookie);
   assert.equal(r.statusCode, 200);
@@ -152,11 +152,11 @@ test('daily-gauntlet: leaderboard endpoint ranks by duration', async (t) => {
 
   const c1 = await registerAndCookie(app, 'alice');
   const s1 = await startDaily(app, c1);
-  await clearAll60(app, c1, s1.json().session_id, sessionStore);
+  await clearAllN(app, c1, s1.json().session_id, sessionStore);
 
   const c2 = await registerAndCookie(app, 'bob');
   const s2 = await startDaily(app, c2);
-  await clearAll60(app, c2, s2.json().session_id, sessionStore);
+  await clearAllN(app, c2, s2.json().session_id, sessionStore);
 
   const board = await app.inject({ method: 'GET', url: '/api/leaderboard/daily' });
   assert.equal(board.statusCode, 200);
@@ -197,7 +197,7 @@ test('daily-gauntlet: /me returns rank and time after completion', async (t) => 
 
   const cookie = await registerAndCookie(app, 'alice');
   const s = await startDaily(app, cookie);
-  await clearAll60(app, cookie, s.json().session_id, sessionStore);
+  await clearAllN(app, cookie, s.json().session_id, sessionStore);
 
   const r = await app.inject({ method: 'GET', url: '/api/leaderboard/daily/me', headers: { cookie } });
   assert.equal(r.statusCode, 200);
@@ -240,7 +240,7 @@ test('daily-gauntlet: day rollover stamps yesterday on completion started yester
   const { session_id } = start.json();
 
   fakeNow = new Date('2026-05-04T16:02:00Z');
-  await clearAll60(app, cookie, session_id, sessionStore);
+  await clearAllN(app, cookie, session_id, sessionStore);
 
   const { rows } = await pool.query('SELECT daily_gauntlet_date FROM runs LIMIT 1');
   assert.equal(rows[0].daily_gauntlet_date.toISOString().slice(0, 10), '2026-05-04');

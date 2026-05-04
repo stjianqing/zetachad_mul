@@ -385,3 +385,23 @@ test('daily-gauntlet: /me returns forfeited:true when lock row exists but no com
   assert.equal(r.statusCode, 200);
   assert.deepEqual(r.json(), { played: false, forfeited: true });
 });
+
+test('daily-gauntlet: lock rows do not appear in /api/leaderboard/daily', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  // alice abandons (lock row only); bob completes.
+  const cA = await registerAndCookie(app, 'alice');
+  await startDaily(app, cA);
+
+  const cB = await registerAndCookie(app, 'bob');
+  const sB = await startDaily(app, cB);
+  await clearAllN(app, cB, sB.json().session_id, sessionStore);
+
+  const board = await app.inject({ method: 'GET', url: '/api/leaderboard/daily' });
+  assert.equal(board.statusCode, 200);
+  const entries = board.json().entries;
+  assert.equal(entries.length, 1, 'only the completed run should appear');
+  assert.equal(entries[0].username, 'bob');
+});

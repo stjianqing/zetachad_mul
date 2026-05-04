@@ -199,7 +199,12 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
         };
       }
       const live = sessionStore.get(session_id);
-      return { time_up: true, final_score: r.finalScore, run_id: live?.runId ?? null };
+      return {
+        time_up: true,
+        final_score: r.finalScore,
+        run_id: live?.runId ?? null,
+        difficulty: live?.difficulty ?? null
+      };
     }
     return {
       correct: r.correct,

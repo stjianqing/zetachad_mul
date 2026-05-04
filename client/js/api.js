@@ -30,6 +30,7 @@ export const api = {
   answer:    (session_id, answer) => request('POST', '/play/answer', { session_id, answer }),
   submit:    (session_id) => request('POST', '/leaderboard/submit', { session_id }),
   board:     () => request('GET',  '/leaderboard'),
+  boardRuns: () => request('GET',  '/leaderboard/runs'),
   champion:  () => request('GET',  '/leaderboard/champion'),
   speed:     () => request('GET',  '/leaderboard/speed'),
   dailyBoard: (date) => request('GET', '/leaderboard/daily' + (date ? `?date=${date}` : '')),

@@ -1,4 +1,5 @@
 import { api } from './api.js';
+import { renderDifficultyBars, renderRunsScatter } from './leaderboard-charts.js';
 
 function fmtDate(iso) {
   const d = new Date(iso);
@@ -83,6 +84,30 @@ async function loadDailyBoard() {
   `).join('');
 }
 
+function chartMessage(svgEl, viewBox, message) {
+  svgEl.setAttribute('viewBox', viewBox);
+  svgEl.innerHTML = `<text x="${viewBox.split(' ')[2] / 2}" y="${viewBox.split(' ')[3] / 2}" text-anchor="middle" dominant-baseline="middle" class="chart-empty-text">${escapeHtml(message)}</text>`;
+}
+
+async function loadAllTimeCharts(currentUsername) {
+  const barsSvg = document.getElementById('diff-bars');
+  const scatterSvg = document.getElementById('runs-scatter');
+  if (!barsSvg || !scatterSvg) return;
+  chartMessage(barsSvg, '0 0 720 240', 'Loading…');
+  chartMessage(scatterSvg, '0 0 720 280', 'Loading…');
+  let runs;
+  try {
+    ({ runs } = await api.boardRuns());
+  } catch {
+    chartMessage(barsSvg, '0 0 720 240', 'Could not load.');
+    chartMessage(scatterSvg, '0 0 720 280', 'Could not load.');
+    return;
+  }
+  const filtered = runs.filter((r) => typeof r.difficulty === 'number');
+  renderDifficultyBars(barsSvg, filtered);
+  renderRunsScatter(scatterSvg, filtered, currentUsername);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   let me = null;
   try { me = (await api.me()).user; } catch {}
@@ -107,4 +132,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {
     document.getElementById('rows').innerHTML = `<tr><td colspan="5">Could not load: ${escapeHtml(e.message)}</td></tr>`;
   }
+  loadAllTimeCharts(me ? me.username : null);
 });

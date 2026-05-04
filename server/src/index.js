@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.routes.js';
 import playRoutes from './routes/play.routes.js';
 import boardRoutes from './routes/board.routes.js';
 import practiceRoutes from './routes/practice.routes.js';
+import challengesRoutes from './routes/challenges.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 
 export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessionStore, medianCache, nowFn = () => new Date() } = {}) {
@@ -24,6 +25,7 @@ export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessio
   await app.register(playRoutes, { sessionStore, pool, medianCache, nowFn });
   await app.register(boardRoutes, { pool, sessionStore, nowFn });
   await app.register(practiceRoutes, { pool, sessionStore });
+  await app.register(challengesRoutes, { pool, baseUrl: process.env.BASE_URL ?? '' });
   await app.register(adminRoutes, { pool, medianCache });
 
   app.get('/api/health', async () => ({ ok: true }));

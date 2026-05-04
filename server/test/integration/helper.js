@@ -20,7 +20,7 @@ export async function getPool() {
 export async function freshApp({ nowFn } = {}) {
   const pool = await getPool();
   if (!pool) return null;
-  await pool.query('TRUNCATE attempts, runs, auth_sessions, users, cluster_medians RESTART IDENTITY CASCADE');
+  await pool.query('TRUNCATE attempts, runs, auth_sessions, users, cluster_medians, challenges RESTART IDENTITY CASCADE');
   const sessionStore = createSessionStore({});
   const medianCache = new MedianCache({ pool });
   medianCache.loadFromRows([]); // empty by default; tests seed via cluster_medians directly or call refresh()

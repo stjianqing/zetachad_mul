@@ -171,7 +171,7 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
     }
 
     const cRes = await pool.query(
-      `SELECT c.id, c.status, c.recipient_id, cr.seed AS challenger_seed
+      `SELECT c.id, c.status, c.recipient_id, c.responded_at, cr.seed AS challenger_seed
        FROM challenges c JOIN runs cr ON cr.id = c.challenger_run_id
        WHERE c.id = $1`,
       [id]
@@ -186,7 +186,7 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
     }
 
     const rRes = await pool.query(
-      'SELECT user_id, seed FROM runs WHERE id=$1',
+      'SELECT user_id, seed, practice, daily_gauntlet_date, played_at FROM runs WHERE id=$1',
       [recipient_run_id]
     );
     const rrun = rRes.rows[0];
@@ -196,6 +196,15 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
     }
     if (Number(rrun.seed) !== Number(c.challenger_seed)) {
       return reply.code(400).send({ error: 'seed_mismatch' });
+    }
+    // Anti-cheat: the run must not be a practice or daily-gauntlet run, and must have been
+    // played AFTER the challenge was accepted. Otherwise a recipient could submit a pre-played
+    // run that happened to use the same 32-bit seed.
+    if (rrun.practice === true || rrun.daily_gauntlet_date != null) {
+      return reply.code(400).send({ error: 'ineligible_recipient_run' });
+    }
+    if (new Date(rrun.played_at) < new Date(c.responded_at)) {
+      return reply.code(400).send({ error: 'run_predates_challenge' });
     }
 
     const upd = await pool.query(
@@ -236,8 +245,20 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
 
   fastify.post('/api/challenges/by-token/:token/redeem', async (req, reply) => {
     const { token } = req.params;
-
     const userId = req.user?.id ?? null;
+
+    // A logged-in challenger redeeming their own share link would trip the
+    // challenger_id <> recipient_id CHECK constraint. Reject here with a useful 400.
+    if (userId !== null) {
+      const owner = await pool.query(
+        'SELECT challenger_id, status FROM challenges WHERE share_token=$1',
+        [token]
+      );
+      if (owner.rowCount > 0 && Number(owner.rows[0].challenger_id) === userId) {
+        return reply.code(400).send({ error: 'cannot_redeem_own_share' });
+      }
+    }
+
     const upd = await pool.query(
       `UPDATE challenges
        SET status='accepted', responded_at=now(), recipient_id=COALESCE($2, recipient_id)

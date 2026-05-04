@@ -695,3 +695,92 @@ test('forfeit sweep: accepted recently is not touched', async (t) => {
   const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
   assert.equal(row.rows[0].status, 'accepted');
 });
+
+test('submit-run: practice run with matching seed → 400 (anti-cheat)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const seed = Number(seedRow.rows[0].seed);
+  // Bob inserts a PRACTICE run with the right seed (impossible in real life, but proves the check).
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed)
+     VALUES ($1, 50, 120000, true, $2) RETURNING id`,
+    [bob.userId, seed]
+  );
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: Number(insRun.rows[0].id) },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.json().error, 'ineligible_recipient_run');
+});
+
+test('submit-run: run played before responded_at → 400 (anti-cheat)', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const seed = Number(seedRow.rows[0].seed);
+  // Insert a run with played_at backdated to 1 hour before the challenge was accepted.
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed, played_at)
+     VALUES ($1, 50, 120000, false, $2, now() - interval '1 hour') RETURNING id`,
+    [bob.userId, seed]
+  );
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: Number(insRun.rows[0].id) },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.json().error, 'run_predates_challenge');
+});
+
+test('redeem: challenger redeeming own share link → 400', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const { token } = await createShareLinkChallenge(app, pool, sessionStore, alice);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/by-token/${token}/redeem`,
+    headers: { cookie: alice.cookie }
+  });
+  assert.equal(r.statusCode, 400);
+  assert.equal(r.json().error, 'cannot_redeem_own_share');
+});

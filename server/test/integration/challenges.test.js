@@ -1014,3 +1014,58 @@ test('forfeit sweep: uses responded_at when never started (responded_at at t-31m
   const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
   assert.equal(row.rows[0].status, 'forfeited');
 });
+
+test('challenge lock: completing a run preserves recipient_started_at', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await acceptChallenge(app, bob.cookie, challengeId);
+  await startChallenge(app, bob.cookie, challengeId);
+
+  // Capture recipient_started_at after /start.
+  const lockRow = await pool.query(
+    'SELECT recipient_started_at FROM challenges WHERE id=$1', [challengeId]
+  );
+  const startedAt = lockRow.rows[0].recipient_started_at;
+  assert.ok(startedAt, 'recipient_started_at should be set by /start');
+
+  // Insert a recipient run with the right seed (mirroring the submit-run test pattern).
+  const seedRow = await pool.query(
+    `SELECT cr.seed FROM challenges c JOIN runs cr ON cr.id=c.challenger_run_id WHERE c.id=$1`,
+    [challengeId]
+  );
+  const expectedSeed = Number(seedRow.rows[0].seed);
+  const insRun = await pool.query(
+    `INSERT INTO runs (user_id, score, duration_ms, practice, seed)
+     VALUES ($1, 50, 120000, false, $2) RETURNING id`,
+    [bob.userId, expectedSeed]
+  );
+  const recipientRunId = Number(insRun.rows[0].id);
+
+  const submitRes = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/submit-run`,
+    payload: { recipient_run_id: recipientRunId },
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(submitRes.statusCode, 200);
+
+  // After submit, the row should be completed AND recipient_started_at must
+  // still match what /start set. Guards against accidental clearing of the column
+  // in the submit-run path.
+  const finalRow = await pool.query(
+    'SELECT status, recipient_run_id, recipient_started_at FROM challenges WHERE id=$1',
+    [challengeId]
+  );
+  assert.equal(finalRow.rows[0].status, 'completed');
+  assert.equal(Number(finalRow.rows[0].recipient_run_id), recipientRunId);
+  assert.equal(
+    finalRow.rows[0].recipient_started_at?.toISOString(),
+    startedAt.toISOString(),
+    'recipient_started_at must not change between /start and submit-run'
+  );
+});

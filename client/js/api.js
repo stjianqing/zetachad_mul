@@ -32,5 +32,16 @@ export const api = {
   champion:  () => request('GET',  '/leaderboard/champion'),
   speed:     () => request('GET',  '/leaderboard/speed'),
   dailyBoard: (date) => request('GET', '/leaderboard/daily' + (date ? `?date=${date}` : '')),
-  dailyMe:   () => request('GET', '/leaderboard/daily/me')
+  dailyMe:   () => request('GET', '/leaderboard/daily/me'),
+  challenges: {
+    create:       (body) => request('POST', '/challenges', body),
+    incoming:     () => request('GET',  '/challenges/incoming'),
+    outgoing:     () => request('GET',  '/challenges/outgoing'),
+    accept:       (id) => request('POST', `/challenges/${id}/accept`),
+    decline:      (id) => request('POST', `/challenges/${id}/decline`),
+    submitRun:    (id, recipientRunId) => request('POST', `/challenges/${id}/submit-run`, { recipient_run_id: recipientRunId }),
+    byToken:      (token) => request('GET',  `/challenges/by-token/${encodeURIComponent(token)}`),
+    redeemToken:  (token) => request('POST', `/challenges/by-token/${encodeURIComponent(token)}/redeem`),
+    result:       (id) => request('GET',  `/challenges/${id}/result`)
+  }
 };

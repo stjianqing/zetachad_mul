@@ -209,4 +209,65 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
     }
     return { ok: true };
   });
+
+  fastify.get('/api/challenges/by-token/:token', async (req, reply) => {
+    const { token } = req.params;
+    const cRes = await pool.query(
+      `SELECT c.id, c.status, cr.score AS challenger_score, u.username AS challenger_username
+       FROM challenges c
+       JOIN runs cr ON cr.id = c.challenger_run_id
+       JOIN users u ON u.id = c.challenger_id
+       WHERE c.share_token = $1`,
+      [token]
+    );
+    const c = cRes.rows[0];
+    if (!c) return reply.code(404).send({ error: 'not_found' });
+    if (c.status !== 'pending') {
+      return reply.code(410).send({ error: 'already_claimed' });
+    }
+    return {
+      id: Number(c.id),
+      challenger: { username: c.challenger_username },
+      challenger_score: c.challenger_score,
+      config: DEFAULT_CONFIG,
+      status: c.status
+    };
+  });
+
+  fastify.post('/api/challenges/by-token/:token/redeem', async (req, reply) => {
+    const { token } = req.params;
+
+    const userId = req.user?.id ?? null;
+    const upd = await pool.query(
+      `UPDATE challenges
+       SET status='accepted', responded_at=now(), recipient_id=COALESCE($2, recipient_id)
+       WHERE share_token=$1 AND status='pending'
+       RETURNING id, challenger_run_id`,
+      [token, userId]
+    );
+    if (upd.rowCount === 0) {
+      return reply.code(410).send({ error: 'already_claimed_or_not_found' });
+    }
+    const challengeId = Number(upd.rows[0].id);
+    const challengerRunId = Number(upd.rows[0].challenger_run_id);
+
+    const runRes = await pool.query('SELECT seed FROM runs WHERE id=$1', [challengerRunId]);
+    const seed = Number(runRes.rows[0].seed);
+    const attRes = await pool.query(
+      `SELECT q_index, response_ms, correct FROM attempts WHERE run_id=$1 ORDER BY q_index ASC`,
+      [challengerRunId]
+    );
+
+    return {
+      id: challengeId,
+      seed,
+      config: DEFAULT_CONFIG,
+      challenger_attempts: attRes.rows.map(a => ({
+        q_index: a.q_index,
+        response_ms: a.response_ms,
+        correct: a.correct
+      })),
+      requires_registration_to_submit: userId === null
+    };
+  });
 }

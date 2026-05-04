@@ -447,3 +447,109 @@ test('submit-run: not in accepted state → 409', async (t) => {
   });
   assert.equal(r.statusCode, 409);
 });
+
+async function createShareLinkChallenge(app, pool, sessionStore, alice) {
+  await playAndFinishStandardRun(app, alice.cookie, sessionStore);
+  const runId = await getLatestRunId(pool, alice.userId);
+  const r = await app.inject({
+    method: 'POST',
+    url: '/api/challenges',
+    payload: { challenger_run_id: runId, share_link: true },
+    headers: { cookie: alice.cookie }
+  });
+  const body = r.json();
+  const token = body.share_url.split('/challenge/')[1];
+  return { id: body.id, token };
+}
+
+test('by-token: anonymous fetch returns challenger info while pending', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const { token } = await createShareLinkChallenge(app, pool, sessionStore, alice);
+
+  const r = await app.inject({
+    method: 'GET',
+    url: `/api/challenges/by-token/${token}`
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.equal(body.challenger.username, 'alice');
+  assert.equal(body.status, 'pending');
+});
+
+test('by-token: redeemed token returns 410', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const { token } = await createShareLinkChallenge(app, pool, sessionStore, alice);
+
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/by-token/${token}/redeem`
+  });
+
+  const r = await app.inject({
+    method: 'GET',
+    url: `/api/challenges/by-token/${token}`
+  });
+  assert.equal(r.statusCode, 410);
+});
+
+test('redeem (anonymous): returns playable payload + requires_registration_to_submit', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const { token } = await createShareLinkChallenge(app, pool, sessionStore, alice);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/by-token/${token}/redeem`
+  });
+  assert.equal(r.statusCode, 200);
+  const body = r.json();
+  assert.ok(typeof body.seed === 'number');
+  assert.ok(body.config);
+  assert.ok(Array.isArray(body.challenger_attempts));
+  assert.equal(body.requires_registration_to_submit, true);
+});
+
+test('redeem (registered): links recipient_id, no registration required', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const { id, token } = await createShareLinkChallenge(app, pool, sessionStore, alice);
+
+  const r = await app.inject({
+    method: 'POST',
+    url: `/api/challenges/by-token/${token}/redeem`,
+    headers: { cookie: bob.cookie }
+  });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.json().requires_registration_to_submit, false);
+
+  const row = await pool.query('SELECT recipient_id FROM challenges WHERE id=$1', [id]);
+  assert.equal(Number(row.rows[0].recipient_id), bob.userId);
+});
+
+test('redeem: second call → 410', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const { token } = await createShareLinkChallenge(app, pool, sessionStore, alice);
+
+  await app.inject({ method: 'POST', url: `/api/challenges/by-token/${token}/redeem` });
+  const r = await app.inject({ method: 'POST', url: `/api/challenges/by-token/${token}/redeem` });
+  assert.equal(r.statusCode, 410);
+});

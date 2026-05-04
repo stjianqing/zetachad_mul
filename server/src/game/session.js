@@ -37,12 +37,14 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       const sessionId = makeId();
       const startedAt = now();
       const isDailyGauntlet = mode === 'daily-gauntlet';
-      const rng = isDailyGauntlet
-        ? makeRng(dateStringToSeed(seedDate))
-        : makeRng(nextSeed());
+      const seed = isDailyGauntlet
+        ? dateStringToSeed(seedDate)
+        : nextSeed();
+      const rng = makeRng(seed);
       const session = {
         id: sessionId,
         userId: userId ?? null,
+        seed,
         config,
         practice,
         weighting,
@@ -161,6 +163,7 @@ export function createSessionStore({ now = () => Date.now(), rngSeed, idleTtlMs 
       session.attempts = [];
       return {
         userId: session.userId,
+        seed: session.seed,
         score: session.score,
         durationMs: session.durationMs,
         practice: session.practice === true,

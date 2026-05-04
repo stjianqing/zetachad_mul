@@ -221,3 +221,30 @@ test('takeRunRecord returns null for unknown session', () => {
   const store = createSessionStore({ rngSeed: 1 });
   assert.equal(store.takeRunRecord('nope'), null);
 });
+
+test('session.start captures the seed used for normal runs', () => {
+  const store = createSessionStore({ rngSeed: 12345 });
+  const r = store.start({ userId: 1, config: DEFAULT_CONFIG });
+  const sess = store.get(r.sessionId);
+  assert.equal(typeof sess.seed, 'number');
+  assert.ok(Number.isInteger(sess.seed));
+});
+
+test('session.start uses date-derived seed for daily-gauntlet, exposes it', () => {
+  const store = createSessionStore({});
+  const r = store.start({
+    userId: 1,
+    config: DEFAULT_CONFIG,
+    mode: 'daily-gauntlet',
+    seedDate: '2026-05-04'
+  });
+  const sess = store.get(r.sessionId);
+  assert.equal(typeof sess.seed, 'number');
+});
+
+test('takeRunRecord includes seed', () => {
+  const store = createSessionStore({ rngSeed: 99 });
+  const r = store.start({ userId: 1, config: DEFAULT_CONFIG });
+  const rec = store.takeRunRecord(r.sessionId);
+  assert.equal(typeof rec.seed, 'number');
+});

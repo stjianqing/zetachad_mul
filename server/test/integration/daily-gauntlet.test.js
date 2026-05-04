@@ -273,3 +273,33 @@ test('daily-gauntlet: /start inserts a lock row with submitted=false', async (t)
   assert.ok(rows[0].daily_gauntlet_date);
   assert.ok(Number.isInteger(Number(rows[0].seed)) && Number(rows[0].seed) > 0, 'lock row should have a date-derived seed');
 });
+
+test('daily-gauntlet: finish UPDATEs the lock row in place', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  const start = await startDaily(app, cookie);
+  const { session_id } = start.json();
+
+  const beforeRows = (await pool.query(
+    'SELECT id, score, submitted_to_leaderboard FROM runs WHERE user_id = (SELECT id FROM users WHERE username=$1)',
+    ['alice']
+  )).rows;
+  assert.equal(beforeRows.length, 1);
+  const lockRunId = Number(beforeRows[0].id);
+  assert.equal(beforeRows[0].score, 0);
+  assert.equal(beforeRows[0].submitted_to_leaderboard, false);
+
+  await clearAllN(app, cookie, session_id, sessionStore);
+
+  const afterRows = (await pool.query(
+    'SELECT id, score, submitted_to_leaderboard FROM runs WHERE user_id = (SELECT id FROM users WHERE username=$1)',
+    ['alice']
+  )).rows;
+  assert.equal(afterRows.length, 1, 'should still be exactly one row — UPDATE not INSERT');
+  assert.equal(Number(afterRows[0].id), lockRunId, 'should be the same id as the lock row');
+  assert.equal(afterRows[0].score, 20);
+  assert.equal(afterRows[0].submitted_to_leaderboard, true);
+});

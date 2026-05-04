@@ -180,6 +180,9 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
   });
 
   async function flushRunIfRecording(req, sessionId) {
+    const live = sessionStore.get(sessionId);
+    const preExistingRunId = live?.runId ?? null;
+
     const rec = sessionStore.takeRunRecord(sessionId);
     if (!rec || rec.userId == null || rec.attempts.length === 0) return;
 
@@ -196,13 +199,39 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
     try {
       client = await pool.connect();
       await client.query('BEGIN');
-      const insRun = await client.query(
-        `INSERT INTO runs (user_id, score, duration_ms, practice, difficulty, daily_gauntlet_date, submitted_to_leaderboard, seed)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING id`,
-        [rec.userId, rec.score, rec.durationMs, rec.practice, difficulty, rec.dailyGauntletDate, rec.submittedToLeaderboard, rec.seed]
-      );
-      const runId = Number(insRun.rows[0].id);
+
+      let runId;
+      if (preExistingRunId != null) {
+        // Daily-gauntlet path: the lock row already exists from /start. UPDATE it.
+        const upd = await client.query(
+          `UPDATE runs
+           SET score = $2,
+               duration_ms = $3,
+               practice = $4,
+               difficulty = $5,
+               submitted_to_leaderboard = $6
+           WHERE id = $1
+           RETURNING id`,
+          [preExistingRunId, rec.score, rec.durationMs, rec.practice, difficulty, rec.submittedToLeaderboard]
+        );
+        if (upd.rowCount === 0) {
+          // Lock row missing — should never happen in normal operation. Log and bail.
+          await client.query('ROLLBACK');
+          req.log.error({ sessionId, preExistingRunId }, 'daily-gauntlet: lock row missing on finish');
+          return;
+        }
+        runId = preExistingRunId;
+      } else {
+        // Normal/practice path: insert a fresh run row.
+        const insRun = await client.query(
+          `INSERT INTO runs (user_id, score, duration_ms, practice, difficulty, daily_gauntlet_date, submitted_to_leaderboard, seed)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING id`,
+          [rec.userId, rec.score, rec.durationMs, rec.practice, difficulty, rec.dailyGauntletDate, rec.submittedToLeaderboard, rec.seed]
+        );
+        runId = Number(insRun.rows[0].id);
+      }
+
       const cols = ['run_id', 'q_index', 'op', 'lhs', 'rhs', 'answer', 'user_answer', 'response_ms', 'correct', 'asked_at'];
       const values = [];
       const placeholders = rec.attempts.map((a, i) => {
@@ -216,20 +245,18 @@ export default async function playRoutes(fastify, { sessionStore, pool, medianCa
       );
       await client.query('COMMIT');
 
-      const live = sessionStore.get(sessionId);
-      if (live) {
-        live.runId = runId;
-        live.difficulty = difficulty;
+      const liveAfter = sessionStore.get(sessionId);
+      if (liveAfter) {
+        // No-op on the UPDATE branch (runId already matches), live assignment on the
+        // INSERT branch where this is the first time the session learns its runId.
+        liveAfter.runId = runId;
+        liveAfter.difficulty = difficulty;
       }
     } catch (err) {
       if (client) {
         try { await client.query('ROLLBACK'); } catch { /* ignore */ }
       }
-      if (err.code === '23505') {
-        req.log.info({ err, sessionId }, 'daily-gauntlet: duplicate completion (race) ignored');
-      } else {
-        req.log.error({ err }, 'analytics: failed to persist run + attempts');
-      }
+      req.log.error({ err }, 'analytics: failed to persist run + attempts');
     } finally {
       if (client) client.release();
     }

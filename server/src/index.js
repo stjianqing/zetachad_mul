@@ -12,6 +12,7 @@ import boardRoutes from './routes/board.routes.js';
 import practiceRoutes from './routes/practice.routes.js';
 import challengesRoutes from './routes/challenges.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import { startForfeitSweep } from './jobs/forfeit-sweep.js';
 
 export async function buildApp({ pool, cookieSecret, cookieSecure = true, sessionStore, medianCache, nowFn = () => new Date() } = {}) {
   const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'info' } });
@@ -65,6 +66,7 @@ async function main() {
   const cookieSecure = (process.env.COOKIE_SECURE ?? 'true') !== 'false';
 
   const app = await buildApp({ pool, cookieSecret, cookieSecure, sessionStore, medianCache });
+  const stopForfeitSweep = startForfeitSweep(pool, { log: app.log });
 
   app.log.info({ clusters: medianCache.getAll().size }, 'MedianCache loaded');
 
@@ -76,6 +78,7 @@ async function main() {
     process.on(sig, async () => {
       app.log.info(`received ${sig}, shutting down`);
       medianCache.stop();
+      stopForfeitSweep();
       await app.close();
       await pool.end();
       process.exit(0);

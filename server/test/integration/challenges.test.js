@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { freshApp, cookieFromResponse, skipIfNoDb } from './helper.js';
 import { DEFAULT_CONFIG } from '../../src/config.js';
+import { runForfeitSweep } from '../../src/jobs/forfeit-sweep.js';
 
 async function registerAndCookie(app, username) {
   const r = await app.inject({
@@ -647,4 +648,50 @@ test('result: completed challenge returns both runs joined', async (t) => {
   assert.equal(body.challenger.username, 'alice');
   assert.equal(body.recipient.username, 'bob');
   assert.ok(typeof body.winner === 'string');
+});
+
+test('forfeit sweep: accepted >30 min ago with no run flips to forfeited', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+
+  await pool.query(
+    `UPDATE challenges SET responded_at = now() - interval '31 minutes' WHERE id=$1`,
+    [challengeId]
+  );
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 1);
+
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'forfeited');
+});
+
+test('forfeit sweep: accepted recently is not touched', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app, pool, sessionStore } = await freshApp();
+  t.after(() => app.close());
+
+  const alice = await registerAndCookie(app, 'alice');
+  const bob = await registerAndCookie(app, 'bob');
+  const challengeId = await createUsernameChallenge(app, pool, sessionStore, alice, 'bob');
+  await app.inject({
+    method: 'POST',
+    url: `/api/challenges/${challengeId}/accept`,
+    headers: { cookie: bob.cookie }
+  });
+
+  const flipped = await runForfeitSweep(pool);
+  assert.equal(flipped, 0);
+  const row = await pool.query('SELECT status FROM challenges WHERE id=$1', [challengeId]);
+  assert.equal(row.rows[0].status, 'accepted');
 });

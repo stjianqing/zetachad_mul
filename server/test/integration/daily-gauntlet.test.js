@@ -187,7 +187,7 @@ test('daily-gauntlet: /me returns played:false when not played', async (t) => {
   const cookie = await registerAndCookie(app, 'alice');
   const r = await app.inject({ method: 'GET', url: '/api/leaderboard/daily/me', headers: { cookie } });
   assert.equal(r.statusCode, 200);
-  assert.deepEqual(r.json(), { played: false });
+  assert.deepEqual(r.json(), { played: false, forfeited: false });
 });
 
 test('daily-gauntlet: /me returns rank and time after completion', async (t) => {
@@ -370,4 +370,18 @@ test('daily-gauntlet: /start handles concurrent-insert race (23505) gracefully',
   const body = r.json();
   assert.equal(body.already_started, true);
   assert.equal(body.forfeited, true);
+});
+
+test('daily-gauntlet: /me returns forfeited:true when lock row exists but no completion', async (t) => {
+  if (skipIfNoDb(t)) return;
+  const { app } = await freshApp();
+  t.after(() => app.close());
+
+  const cookie = await registerAndCookie(app, 'alice');
+  await startDaily(app, cookie);
+  // Don't answer — leave the lock row sitting there.
+
+  const r = await app.inject({ method: 'GET', url: '/api/leaderboard/daily/me', headers: { cookie } });
+  assert.equal(r.statusCode, 200);
+  assert.deepEqual(r.json(), { played: false, forfeited: true });
 });

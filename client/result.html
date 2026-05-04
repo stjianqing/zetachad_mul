@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>zetachad — challenge result</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main id="result-root" class="result-root">
+    <div id="loading">loading…</div>
+    <div id="content" hidden>
+      <h1 id="result-title"></h1>
+      <div id="drag-race"></div>
+      <div id="result-caption" class="result-caption"></div>
+      <div class="result-actions">
+        <button id="replay">REPLAY</button>
+        <button id="view-questions">VIEW QUESTIONS</button>
+        <a id="rematch" href="#" hidden>REMATCH</a>
+        <a href="index.html">HOME</a>
+      </div>
+      <div id="head-to-head" hidden></div>
+    </div>
+    <div id="error" hidden></div>
+  </main>
+  <script type="module" src="js/result-page.js"></script>
+</body>
+</html>

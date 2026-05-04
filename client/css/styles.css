@@ -1316,3 +1316,66 @@ button, a.secondary, .auth-form input, .leaderboard-table a {
 }
 #challenge-block #challenge-share-link:hover { background: rgba(159, 232, 112, 0.08); }
 #challenge-status { margin-top: 0.75rem; font-size: 0.85em; min-height: 1em; }
+
+/* ----- Challenge result page ----- */
+.result-root { max-width: 720px; margin: 2rem auto; padding: 1rem; }
+.result-root h1 { font-family: 'Space Grotesk', sans-serif; }
+
+.drag-race { display: flex; flex-direction: column; gap: 0.75rem; padding: 1rem 0; }
+.drag-race .lane {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 1.6rem;
+  position: relative;
+}
+.drag-race .lane-label { width: 9rem; text-align: right; font-weight: 600; }
+.drag-race .lane-bar {
+  flex: 1;
+  height: 0.6rem;
+  background: rgba(159, 232, 112, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+.drag-race .lane-bar-fill {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  background: #9fe870;
+  width: 0%;
+  transition: width 50ms linear;
+}
+.drag-race .lane.ghost .lane-bar-fill { background: rgba(159, 232, 112, 0.45); }
+.drag-race .lane-score { width: 2.5rem; text-align: center; font-weight: 700; }
+.drag-race .q-flash {
+  position: absolute;
+  top: -1.4rem;
+  font-size: 0.8em;
+  opacity: 0;
+  transition: opacity 100ms;
+}
+.drag-race .q-flash.show { opacity: 1; }
+.drag-race .q-flash.wrong { color: #ff5c5c; }
+
+.result-caption { font-size: 1.4em; font-weight: 700; margin: 1rem 0; }
+.result-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+.result-actions button, .result-actions a {
+  background: transparent;
+  border: 1px solid rgba(159, 232, 112, 0.4);
+  color: #9fe870;
+  font-family: inherit;
+  letter-spacing: 0.1em;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  text-decoration: none;
+}
+.result-actions button:hover, .result-actions a:hover { background: rgba(159, 232, 112, 0.08); }
+
+.h2h-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+.h2h-table th, .h2h-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid rgba(159, 232, 112, 0.1); font-size: 0.9em; }
+.h2h-table tr.faster-correct { background: rgba(159, 232, 112, 0.06); }
+.h2h-table tr.slower-or-wrong { background: rgba(255, 92, 92, 0.06); }

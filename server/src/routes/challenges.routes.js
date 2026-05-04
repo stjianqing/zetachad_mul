@@ -62,7 +62,7 @@ export default async function challengesRoutes(fastify, { pool, baseUrl = '' }) 
     return {
       id: Number(ins.rows[0].id),
       status: ins.rows[0].status,
-      share_url: `${baseUrl}/challenge/${token}`
+      share_url: `${baseUrl}/challenge.html?t=${token}`
     };
   });
 

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>zetachad — challenge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <main class="challenge-landing narrow">
+    <div id="loading">loading challenge…</div>
+    <div id="ready" hidden>
+      <h1 id="ready-title"></h1>
+      <p>On the same questions they got. <strong>One attempt.</strong></p>
+      <button id="ready-btn" class="primary">I'M READY</button>
+      <p class="muted" id="anon-note" hidden>You'll need to register before this counts on the leaderboard.</p>
+    </div>
+    <div id="claimed" hidden>
+      <h1>this link's been claimed.</h1>
+      <a href="index.html">back home</a>
+    </div>
+    <div id="error-state" hidden>
+      <h1>something broke.</h1>
+      <a href="index.html">back home</a>
+    </div>
+  </main>
+  <script type="module" src="js/challenge-landing.js"></script>
+</body>
+</html>

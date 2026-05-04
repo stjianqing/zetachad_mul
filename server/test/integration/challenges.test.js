@@ -83,7 +83,7 @@ test('create challenge by share link — returns share_url', async (t) => {
   assert.equal(r.statusCode, 200);
   const body = r.json();
   assert.ok(body.share_url);
-  assert.match(body.share_url, /\/challenge\//);
+  assert.match(body.share_url, /\/challenge\.html\?t=/);
 });
 
 test('create challenge: self-challenge blocked (400)', async (t) => {
@@ -459,7 +459,7 @@ async function createShareLinkChallenge(app, pool, sessionStore, alice) {
     headers: { cookie: alice.cookie }
   });
   const body = r.json();
-  const token = body.share_url.split('/challenge/')[1];
+  const token = body.share_url.split('?t=')[1];
   return { id: body.id, token };
 }
 

@@ -170,17 +170,23 @@ async function startChallenge(id) {
   }
 
   let acceptPayload;
-  try {
-    acceptPayload = await api.challenges.accept(id);
-  } catch (e) {
-    if (e.status === 404) {
-      // Already accepted/declined/etc. — bounce to result page.
-      location.href = `result.html?id=${id}`;
+  const stashed = sessionStorage.getItem(`zc_challenge_${id}_redeem`);
+  if (stashed) {
+    sessionStorage.removeItem(`zc_challenge_${id}_redeem`);
+    acceptPayload = JSON.parse(stashed);
+  } else {
+    try {
+      acceptPayload = await api.challenges.accept(id);
+    } catch (e) {
+      if (e.status === 404) {
+        // Already accepted/declined/etc. — bounce to result page.
+        location.href = `result.html?id=${id}`;
+        return;
+      }
+      alert('Could not accept challenge: ' + e.message);
+      location.href = 'index.html';
       return;
     }
-    alert('Could not accept challenge: ' + e.message);
-    location.href = 'index.html';
-    return;
   }
 
   let startRes;
